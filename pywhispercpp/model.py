@@ -71,6 +71,10 @@ class Model:
                  models_dir: str = None,
                  params_sampling_strategy: int = 0,
                  redirect_whispercpp_logs_to: Union[bool, TextIO, str, None] = False,
+                 use_openvino: bool = False,
+                 openvino_model_path: str = None,
+                 openvino_device: str = 'CPU',
+                 openvino_cache_dir: str = None,
                  **params):
         """
         :param model: The name of the model, one of the [AVAILABLE_MODELS](/pywhispercpp/#pywhispercpp.constants.AVAILABLE_MODELS),
@@ -79,6 +83,10 @@ class Model:
                             exist, default to [MODELS_DIR](/pywhispercpp/#pywhispercpp.constants.MODELS_DIR) <user_data_dir/pywhsipercpp/models>
         :param params_sampling_strategy: 0 -> GREEDY, else BEAM_SEARCH
         :param redirect_whispercpp_logs_to: where to redirect the whisper.cpp logs, default to False (no redirection), accepts str file path, sys.stdout, sys.stderr, or use None to redirect to devnull
+        :param use_openvino: whether to use OpenVINO or not
+        :param openvino_model_path: path to the OpenVINO model
+        :param openvino_device: OpenVINO device, default to CPU
+        :param openvino_cache_dir: OpenVINO cache directory
         :param params: keyword arguments for different whisper.cpp parameters,
                         see [PARAMS_SCHEMA](/pywhispercpp/#pywhispercpp.constants.PARAMS_SCHEMA)
         """
@@ -91,8 +99,13 @@ class Model:
             pw.whisper_sampling_strategy.WHISPER_SAMPLING_BEAM_SEARCH
         self._params = pw.whisper_full_default_params(self._sampling_strategy)
         # assign params
+        self.params = params
         self._set_params(params)
         self.redirect_whispercpp_logs_to = redirect_whispercpp_logs_to
+        self.use_openvino = use_openvino
+        self.openvino_model_path = openvino_model_path
+        self.openvino_device = openvino_device
+        self.openvino_cache_dir = openvino_cache_dir
         # init the model
         self._init_model()
 
@@ -229,6 +242,10 @@ class Model:
         logger.info("Initializing the model ...")
         with utils.redirect_stderr(to=self.redirect_whispercpp_logs_to):
             self._ctx = pw.whisper_init_from_file(self.model_path)
+            if self.use_openvino:
+                pw.whisper_ctx_init_openvino_encoder(self._ctx, self.openvino_model_path, self.openvino_device, self.openvino_cache_dir)
+
+
 
     def _set_params(self, kwargs: dict) -> None:
         """
