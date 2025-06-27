@@ -412,13 +412,13 @@ PYBIND11_MODULE(_pywhispercpp, m) {
     py::class_<whisper_model_loader_wrapper>(m,"whisper_model_loader")
             .def(py::init<>());
 
-    DEF_RELEASE_GIL("whisper_init_from_file", &whisper_init_from_file_wrapper, "Various functions for loading a ggml whisper model.\n"
+    m.def("whisper_init_from_file", &whisper_init_from_file_wrapper, "Various functions for loading a ggml whisper model.\n"
                                                                     "Allocate (almost) all memory needed for the model.\n"
                                                                     "Return NULL on failure");
-    DEF_RELEASE_GIL("whisper_init_from_buffer", &whisper_init_from_buffer_wrapper, "Various functions for loading a ggml whisper model.\n"
+    m.def("whisper_init_from_buffer", &whisper_init_from_buffer_wrapper, "Various functions for loading a ggml whisper model.\n"
                                                                         "Allocate (almost) all memory needed for the model.\n"
                                                                         "Return NULL on failure");
-    DEF_RELEASE_GIL("whisper_init", &whisper_init_wrapper, "Various functions for loading a ggml whisper model.\n"
+    m.def("whisper_init", &whisper_init_wrapper, "Various functions for loading a ggml whisper model.\n"
                                                 "Allocate (almost) all memory needed for the model.\n"
                                                 "Return NULL on failure");
 
