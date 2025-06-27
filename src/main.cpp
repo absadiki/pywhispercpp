@@ -221,6 +221,8 @@ int whisper_full_wrapper(
         int   n_samples){
     py::buffer_info buf = samples.request();
     float *samples_ptr = static_cast<float *>(buf.ptr);
+
+    py::gil_scoped_release release;
     return whisper_full(ctx_w->ptr, params, samples_ptr, n_samples);
 }
 
@@ -232,11 +234,14 @@ int whisper_full_parallel_wrapper(
         int n_processors){
     py::buffer_info buf = samples.request();
     float *samples_ptr = static_cast<float *>(buf.ptr);
+
+    py::gil_scoped_release release;
     return whisper_full_parallel(ctx_w->ptr, params, samples_ptr, n_samples, n_processors);
 }
 
 
 int whisper_full_n_segments_wrapper(struct whisper_context_wrapper * ctx){
+    py::gil_scoped_release release;
     return whisper_full_n_segments(ctx->ptr);
 }
 
@@ -412,13 +417,13 @@ PYBIND11_MODULE(_pywhispercpp, m) {
     py::class_<whisper_model_loader_wrapper>(m,"whisper_model_loader")
             .def(py::init<>());
 
-    m.def("whisper_init_from_file", &whisper_init_from_file_wrapper, "Various functions for loading a ggml whisper model.\n"
+    DEF_RELEASE_GIL("whisper_init_from_file", &whisper_init_from_file_wrapper, "Various functions for loading a ggml whisper model.\n"
                                                                     "Allocate (almost) all memory needed for the model.\n"
                                                                     "Return NULL on failure");
-    m.def("whisper_init_from_buffer", &whisper_init_from_buffer_wrapper, "Various functions for loading a ggml whisper model.\n"
+    DEF_RELEASE_GIL("whisper_init_from_buffer", &whisper_init_from_buffer_wrapper, "Various functions for loading a ggml whisper model.\n"
                                                                         "Allocate (almost) all memory needed for the model.\n"
                                                                         "Return NULL on failure");
-    m.def("whisper_init", &whisper_init_wrapper, "Various functions for loading a ggml whisper model.\n"
+    DEF_RELEASE_GIL("whisper_init", &whisper_init_wrapper, "Various functions for loading a ggml whisper model.\n"
                                                 "Allocate (almost) all memory needed for the model.\n"
                                                 "Return NULL on failure");
 
@@ -637,14 +642,14 @@ PYBIND11_MODULE(_pywhispercpp, m) {
 
     m.def("whisper_full_default_params", &whisper_full_default_params_wrapper);
 
-    DEF_RELEASE_GIL("whisper_full", &whisper_full_wrapper, "Run the entire model: PCM -> log mel spectrogram -> encoder -> decoder -> text\n"
+    m.def("whisper_full", &whisper_full_wrapper, "Run the entire model: PCM -> log mel spectrogram -> encoder -> decoder -> text\n"
                                                  "Uses the specified decoding strategy to obtain the text.\n");
 
-    DEF_RELEASE_GIL("whisper_full_parallel", &whisper_full_parallel_wrapper, "Split the input audio in chunks and process each chunk separately using whisper_full()\n"
+    m.def("whisper_full_parallel", &whisper_full_parallel_wrapper, "Split the input audio in chunks and process each chunk separately using whisper_full()\n"
                                                                     "It seems this approach can offer some speedup in some cases.\n"
                                                                     "However, the transcription accuracy can be worse at the beginning and end of each chunk.");
 
-    DEF_RELEASE_GIL("whisper_full_n_segments", &whisper_full_n_segments_wrapper, "Number of generated text segments.\n"
+    m.def("whisper_full_n_segments", &whisper_full_n_segments_wrapper, "Number of generated text segments.\n"
                                                                        "A segment can be a few words, a sentence, or even a paragraph.\n");
 
     m.def("whisper_full_lang_id", &whisper_full_lang_id_wrapper, "Language id associated with the current context");
