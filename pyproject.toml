@@ -7,7 +7,8 @@ requires = [
     "repairwheel",
     "setuptools-scm>=8"
 ]
-build-backend = "setuptools.build_meta"
+build-backend = "backend"
+backend-path = ["."]
 
 [tool.mypy]
 files = "setup.py"
