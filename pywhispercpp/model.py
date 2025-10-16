@@ -36,8 +36,8 @@ class Segment:
 
     def __init__(self, t0: int, t1: int, text: str, probability: float = np.nan):
         """
-        :param t0: start time
-        :param t1: end time
+        :param t0: start time in whisper.cpp units (1 unit = 10 milliseconds)
+        :param t1: end time in whisper.cpp units (1 unit = 10 milliseconds)
         :param text: text
         :param probability: Confidence score for the segment, computed as the geometric mean of
             the token probabilities for the segment (NaN if not calculated).
@@ -47,6 +47,20 @@ class Segment:
         self.t1 = t1
         self.text = text
         self.probability = probability
+
+    def shift(self, offset: int):
+        """
+        Return a new Segment with timestamps shifted by `offset` units.
+
+        :param offset: time offset in whisper.cpp units (1 unit = 10 ms)
+        :return: new Segment with shifted timestamps
+        """
+        return Segment(
+            t0=self.t0 + offset,
+            t1=self.t1 + offset,
+            text=self.text,
+            probability=self.probability,
+        )
 
     def __str__(self):
         return f"t0={self.t0}, t1={self.t1}, text={self.text}, probability={self.probability}"
@@ -104,6 +118,8 @@ class Model:
                    media: Union[str, np.ndarray],
                    n_processors: int = None,
                    new_segment_callback: Callable[[Segment], None] = None,
+                   start_time: float = 0,
+                   end_time: float = None,
                    **params) -> List[Segment]:
         """
         Transcribes the media provided as input and returns list of `Segment` objects.
@@ -124,7 +140,7 @@ class Model:
         else:
             if not Path(media).exists():
                 raise FileNotFoundError(media)
-            audio = self._load_audio(media)
+            audio = self._load_audio(media, start_time=start_time, end_time=end_time)
 
         # Handle extract_probability parameter
         self.extract_probability = params.pop('extract_probability', False)
@@ -138,11 +154,11 @@ class Model:
             pw.assign_new_segment_callback(self._params, Model.__call_new_segment_callback)
 
         # run inference
-        start_time = time()
+        start = time()
         logger.info("Transcribing ...")
         res = self._transcribe(audio, n_processors=n_processors)
-        end_time = time()
-        logger.info(f"Inference time: {end_time - start_time:.3f} s")
+        end = time()
+        logger.info(f"Inference time: {end- start:.3f} s")
         return res
 
     @staticmethod
@@ -299,7 +315,7 @@ class Model:
             Model._new_segment_callback(segment)
 
     @staticmethod
-    def _load_audio(media_file_path: str) -> np.array:
+    def _load_audio(media_file_path: str, start_time: float = 0, end_time: float = None) -> np.array:
         """
          Helper method to return a `np.array` object from a media file
          If the media file is not a WAV file, it will try to convert it using ffmpeg
@@ -308,7 +324,7 @@ class Model:
         :return: Numpy array
         """
 
-        def wav_to_np(file_path):
+        def wav_to_np(file_path: str, start_time: float = 0, end_time: float = None):
             with wave.open(file_path, 'rb') as wf:
                 num_channels = wf.getnchannels()
                 sample_width = wf.getsampwidth()
@@ -316,28 +332,32 @@ class Model:
                 num_frames = wf.getnframes()
 
                 if num_channels not in (1, 2):
-                    raise Exception(f"WAV file must be mono or stereo")
-
+                    raise Exception("WAV file must be mono or stereo")
                 if sample_rate != pw.WHISPER_SAMPLE_RATE:
                     raise Exception(f"WAV file must be {pw.WHISPER_SAMPLE_RATE} Hz")
-
                 if sample_width != 2:
-                    raise Exception(f"WAV file must be 16-bit")
+                    raise Exception("WAV file must be 16-bit")
 
-                raw = wf.readframes(num_frames)
-                wf.close()
+                # --- compute frame range ---
+                start_frame = int(start_time * sample_rate)
+                end_frame = int(end_time * sample_rate) if end_time else num_frames
+                end_frame = min(end_frame, num_frames)
+                wf.setpos(start_frame)
+                frames_to_read = end_frame - start_frame
+
+                raw = wf.readframes(frames_to_read)
                 audio = np.frombuffer(raw, dtype=np.int16).astype(np.float32)
-                n = num_frames
+
                 if num_channels == 1:
                     pcmf32 = audio / 32768.0
                 else:
                     audio = audio.reshape(-1, 2)
-                    # Averaging the two channels
                     pcmf32 = (audio[:, 0] + audio[:, 1]) / 65536.0
+
                 return pcmf32
 
         if media_file_path.endswith('.wav'):
-            return wav_to_np(media_file_path)
+            return wav_to_np(media_file_path, start_time, start_time)
         else:
             if shutil.which('ffmpeg') is None:
                 raise Exception(
@@ -351,7 +371,7 @@ class Model:
                     'ffmpeg', '-i', media_file_path, '-ac', '1', '-ar', '16000',
                     temp_file_path, '-y'
                 ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                return wav_to_np(temp_file_path)
+                return wav_to_np(temp_file_path, start_time, end_time)
             finally:
                 os.remove(temp_file_path)
 
