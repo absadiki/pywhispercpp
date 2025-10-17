@@ -130,6 +130,8 @@ class Model:
                              binding to whisper.cpp/whisper_full_parallel
                              > Split the input audio in chunks and process each chunk separately using whisper_full()
         :param new_segment_callback: callback function that will be called when a new segment is generated
+        :param start_time: start time in seconds, default to 0
+        :param end_time: end time in seconds, default to None
         :param params: keyword arguments for different whisper.cpp parameters, see ::: constants.PARAMS_SCHEMA
         :param extract_probability: If True, calculates the geometric mean of token probabilities for each segment,
             providing a confidence score interpretable as a probability in [0, 1].
