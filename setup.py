@@ -67,6 +67,7 @@ class CMakeBuild(build_ext):
         cmake_args = [
             f"-DCMAKE_LIBRARY_OUTPUT_DIRECTORY={extdir}{os.sep}",
             f"-DPYTHON_EXECUTABLE={sys.executable}",
+            f"-DPython_EXECUTABLE={sys.executable}",  # Alternative Python executable setting
             f"-DCMAKE_BUILD_TYPE={cfg}",  # not used on MSVC, but no harm
         ]
         if self.editable_mode:
@@ -149,9 +150,35 @@ class CMakeBuild(build_ext):
         build_temp = Path(self.build_temp) / ext.name
         if not build_temp.exists():
             build_temp.mkdir(parents=True)
+        else:
+            # Clean up any corrupted CMake cache files
+            cmake_cache = build_temp / "CMakeCache.txt"
+            if cmake_cache.exists():
+                try:
+                    cmake_cache.unlink()
+                    print("Removed corrupted CMakeCache.txt")
+                except Exception as e:
+                    print(f"Warning: Could not remove CMakeCache.txt: {e}")
 
+        # Only pass specific environment variables that are safe for CMake
+        # and relevant to the build process
+        safe_env_vars = [
+            'GGML_CUDA', 'GGML_VULKAN', 'GGML_BLAS', 'GGML_OPENBLAS',
+            'WHISPER_COREML', 'WHISPER_COREML_ALLOW_FALLBACK',
+            'CMAKE_BUILD_PARALLEL_LEVEL', 'CMAKE_GENERATOR',
+            'CMAKE_ARGS', 'DEBUG', 'VERBOSE'
+        ]
+        
         for key, value in os.environ.items():
-            cmake_args.append(f'-D{key}={value}')
+            # Only pass safe environment variables that don't contain problematic characters
+            if (key in safe_env_vars and 
+                value and 
+                '\n' not in value and 
+                '\r' not in value and
+                not key.startswith('FZF_') and
+                not key.startswith('PS1') and
+                not key.startswith('PROMPT')):
+                cmake_args.append(f'-D{key}={value}')
 
         subprocess.run(
             ["cmake", ext.sourcedir, *cmake_args], cwd=build_temp, check=True

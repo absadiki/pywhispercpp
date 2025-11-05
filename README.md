@@ -56,43 +56,46 @@ choco install ffmpeg
 scoop install ffmpeg
 ```
 
-### NVIDIA GPU support
-To Install the package with CUDA support, make sure you have [cuda](https://developer.nvidia.com/cuda-downloads) installed and use `GGML_CUDA=1`:
+### Hardware Acceleration
 
+To build with hardware acceleration support, use the `--config-settings` flag:
+
+#### NVIDIA GPU (CUDA)
+Requires [CUDA toolkit](https://developer.nvidia.com/cuda-downloads) installed.
 ```shell
-GGML_CUDA=1 pip install git+https://github.com/absadiki/pywhispercpp
+# With pip
+pip install git+https://github.com/absadiki/pywhispercpp --config-settings="accel=cuda"
+
+# With uv
+uv add git+https://github.com/absadiki/pywhispercpp -Caccel=cuda
+
+# Local install
+pip install . --config-settings="accel=cuda"
 ```
-### CoreML support
 
-Install the package with `WHISPER_COREML=1`:
-
+#### CoreML (Apple Silicon)
 ```shell
-WHISPER_COREML=1 pip install git+https://github.com/absadiki/pywhispercpp
+pip install git+https://github.com/absadiki/pywhispercpp --config-settings="accel=coreml"
 ```
 
-### Vulkan support
-
-Install the package with `GGML_VULKAN=1`:
-
+#### Vulkan
 ```shell
-GGML_VULKAN=1 pip install git+https://github.com/absadiki/pywhispercpp
+pip install git+https://github.com/absadiki/pywhispercpp --config-settings="accel=vulkan"
 ```
 
-### OpenBLAS support
-
-If OpenBLAS is installed, you can use `GGML_BLAS=1`. The other flags ensure you're installing fresh with the correct flags, and printing output for sanity checking.
+#### OpenBLAS
+Requires OpenBLAS to be installed on your system.
 ```shell
-GGML_BLAS=1 pip install git+https://github.com/absadiki/pywhispercpp --no-cache --force-reinstall -v
+pip install git+https://github.com/absadiki/pywhispercpp --config-settings="accel=openblas"
 ```
 
-### OpenVINO support
+#### OpenVINO
+Follow the steps to download correct OpenVINO package from [whisper.cpp OpenVINO docs](https://github.com/ggerganov/whisper.cpp?tab=readme-ov-file#openvino-support).
 
-Follow the the steps to download correct OpenVINO package (https://github.com/ggerganov/whisper.cpp?tab=readme-ov-file#openvino-support).
-
-Then init the OpenVINO environment and build.
-```
+Then initialize the OpenVINO environment and build:
+```shell
 source ~/l_openvino_toolkit_ubuntu22_2023.0.0.10926.b4452d56304_x86_64/setupvars.sh 
-WHISPER_OPENVINO=1 pip install git+https://github.com/absadiki/pywhispercpp --no-cache --force-reinstall
+pip install git+https://github.com/absadiki/pywhispercpp --config-settings="accel=openvino"
 ```
 
 Note that the toolkit for Ubuntu22 works on Ubuntu24
