@@ -53,10 +53,11 @@ jobs:
     - name: Build wheels
       run: python -m cibuildwheel --output-dir wheelhouse
       env:
-        CIBW_ARCHS: auto
+        # Whisper.cpp tries to use BMI2 on 32 bit Windows, so don't target 32 bit Windows to avoid that bug. See https://github.com/ggml-org/whisper.cpp/pull/3543
+        CIBW_ARCHS: ${{ contains(matrix.os, 'windows') && 'auto64' || 'auto' }}
          # for windows setup.py repairwheel step should solve it
         CIBW_SKIP: pp* cp38-*
-        CIBW_ENVIRONMENT: ${{ contains(matrix.os, 'arm') && 'CMAKE_ARGS="-DGGML_NATIVE=OFF -DGGML_CPU_ARM_ARCH=armv8-a"' || '' }}
+        CIBW_ENVIRONMENT: CMAKE_ARGS="-DGGML_BACKEND_DL=ON -DGGML_CPU_ALL_VARIANTS=ON"
 
     - name: Verify clean directory
       run: git diff --exit-code
