@@ -226,6 +226,11 @@ int whisper_full_wrapper(
     return whisper_full(ctx_w->ptr, params, samples_ptr, n_samples);
 }
 
+int whisper_ctx_init_openvino_encoder_wrapper(struct whisper_context_wrapper * ctx_w) {
+    whisper_ctx_init_openvino_encoder(ctx_w->ptr, nullptr, "CPU", nullptr);
+    return 0;
+}
+
 int whisper_full_parallel_wrapper(
         struct whisper_context_wrapper * ctx_w,
         struct whisper_full_params   params,
@@ -666,6 +671,10 @@ PYBIND11_MODULE(_pywhispercpp, m) {
                                                                                 "This contains probabilities, timestamps, etc.");
 
     m.def("whisper_full_get_token_p", &whisper_full_get_token_p_wrapper, "Get the probability of the specified token in the specified segment.");
+
+    ////////////////////////////////////////////////////////////////////////////
+
+    m.def("whisper_ctx_init_openvino_encoder", &whisper_ctx_init_openvino_encoder_wrapper, "Initialize OpenVINO encoder.");
 
     ////////////////////////////////////////////////////////////////////////////
 

@@ -254,8 +254,10 @@ class Model:
         :return:
         """
         logger.info("Initializing the model ...")
+
         with utils.redirect_stderr(to=self.redirect_whispercpp_logs_to):
             self._ctx = pw.whisper_init_from_file(self.model_path)
+            pw.whisper_ctx_init_openvino_encoder(self._ctx)
 
     def _set_params(self, kwargs: dict) -> None:
         """
