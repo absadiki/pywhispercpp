@@ -225,7 +225,7 @@ class Model:
     @staticmethod
     def lang_max_id() -> int:
         """
-        Returns number of supported languages.
+        Largest language id (i.e. number of available languages - 1)
         Direct binding to whisper.cpp/lang_max_id
         :return:
         """
@@ -389,11 +389,11 @@ class Model:
             audio = self._load_audio(media)
 
         pw.whisper_pcm_to_mel(self._ctx, audio, len(audio), n_threads)
-        lang_max_id = self.lang_max_id()
-        probs = np.zeros(lang_max_id, dtype=np.float32)
+        lang_count = self.lang_max_id() + 1
+        probs = np.zeros(lang_count, dtype=np.float32)
         auto_detect = pw.whisper_lang_auto_detect(self._ctx, offset_ms, n_threads, probs)
         langs = self.available_languages()
-        lang_probs = {langs[i]: probs[i] for i in range(lang_max_id)}
+        lang_probs = {langs[i]: probs[i] for i in range(lang_count)}
         return (langs[auto_detect], probs[auto_detect]), lang_probs
 
     def __del__(self):
