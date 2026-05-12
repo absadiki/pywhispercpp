@@ -94,10 +94,7 @@ class Model:
         :param params: keyword arguments for different whisper.cpp parameters,
                         see [PARAMS_SCHEMA](/pywhispercpp/#pywhispercpp.constants.PARAMS_SCHEMA)
         """
-        if Path(model).is_file():
-            self.model_path = model
-        else:
-            self.model_path = utils.download_model(model, models_dir)
+        self.model_path = utils.resolve_model_path(model, models_dir)
         self._ctx = None
         self._sampling_strategy = pw.whisper_sampling_strategy.WHISPER_SAMPLING_GREEDY if params_sampling_strategy == 0 else \
             pw.whisper_sampling_strategy.WHISPER_SAMPLING_BEAM_SEARCH
