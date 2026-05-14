@@ -15,7 +15,7 @@ jobs:
     name: Build SDist
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
       with:
         submodules: true
 
@@ -25,7 +25,7 @@ jobs:
     - name: Check metadata
       run: pipx run twine check dist/*
 
-    - uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@v7
       with:
         name: artifact-sdist
         path: dist/*.tar.gz
@@ -40,12 +40,12 @@ jobs:
         os: [ubuntu-24.04-arm, ubuntu-latest, windows-2022, macos-14]
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
       with:
         submodules: true
 
     # Used to host cibuildwheel
-    - uses: actions/setup-python@v5
+    - uses: actions/setup-python@v6
 
     - name: Install cibuildwheel
       run: python -m pip install cibuildwheel
@@ -67,7 +67,7 @@ jobs:
       run: ls wheelhouse
 
     - name: Upload wheels
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: artifact-${{ matrix.os }}
         path: wheelhouse/*.whl
@@ -83,11 +83,11 @@ jobs:
         python-version: [3.11, 3.12, 3.13]
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
       with:
         submodules: true
 
-    - uses: actions/download-artifact@v4
+    - uses: actions/download-artifact@v8
       with:
         pattern: artifact-*
         merge-multiple: true
@@ -98,7 +98,7 @@ jobs:
         ls -l wheelhouse
 
     - name: Set up Python
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v6
       with:
         python-version: ${{ matrix.python-version }}
 
@@ -123,11 +123,11 @@ jobs:
     if: github.event_name == 'release' && github.event.action == 'published'
 
     steps:
-    - uses: actions/setup-python@v5
+    - uses: actions/setup-python@v6
       with:
         python-version: "3.x"
 
-    - uses: actions/download-artifact@v4
+    - uses: actions/download-artifact@v8
       with:
         pattern: artifact-*
         merge-multiple: true

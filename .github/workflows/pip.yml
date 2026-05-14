@@ -19,10 +19,10 @@ jobs:
             cmake_args: -DGGML_BMI2=OFF
             archflags: ""
           - platform: macos-14
-
             cmake_args: >-
               -DGGML_NATIVE=OFF 
               -DGGML_CPU_ARM_ARCH=armv8-a
+            # these were left for refrence 
             # -DCMAKE_OSX_ARCHITECTURES=arm64;x86_64
             # archflags: -arch arm64 -arch x86_64
           - platform: ubuntu-latest
@@ -32,11 +32,11 @@ jobs:
     runs-on: ${{ matrix.platform }}
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
       with:
         submodules: true
 
-    - uses: actions/setup-python@v5
+    - uses: actions/setup-python@v6
       with:
         python-version: ${{ matrix.python-version }}
 
