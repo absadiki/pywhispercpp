@@ -77,6 +77,17 @@ class CMakeBuild(build_ext):
                     "-DCMAKE_INSTALL_RPATH=@loader_path",
                     "-DCMAKE_BUILD_WITH_INSTALL_RPATH=ON"
                 ]
+                
+                
+                os.environ.setdefault("MACOSX_DEPLOYMENT_TARGET", "14.0")
+                cmake_args += [
+                    f"-DCMAKE_OSX_DEPLOYMENT_TARGET={os.environ['MACOSX_DEPLOYMENT_TARGET']}"
+                ]
+
+                archs = re.findall(r"-arch (\S+)", os.environ.get("ARCHFLAGS", ""))
+                if archs:
+                    cmake_args += [f"-DCMAKE_OSX_ARCHITECTURES={';'.join(archs)}"]
+                
             elif sys.platform.startswith('linux'):
                 # Linux-specific settings
                 cmake_args += [
