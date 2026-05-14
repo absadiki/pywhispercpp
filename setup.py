@@ -191,7 +191,8 @@ class RepairWheel(bdist_wheel):
         if os.environ.get('NO_REPAIR', '0') == '1':
             print("Skipping wheel repair")
             return
-        if os.environ.get('CIBUILDWHEEL', '0') == '0' or sys.platform.startswith('win'):
+        # if os.environ.get('CIBUILDWHEEL', '0') == '0' or sys.platform.startswith('win'):
+        if sys.platform.startswith('win'):
             # for linux and macos we use the default wheel repair command from cibuildwheel, for windows we need to do it manually as there is no repair command
             self.repair_wheel()
 
