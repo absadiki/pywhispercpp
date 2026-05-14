@@ -80,6 +80,36 @@ def download_model(model_name: str, download_dir=None, chunk_size=1024) -> str:
     return str(file_path.absolute())
 
 
+def resolve_model_path(model_name: str, models_dir=None) -> str:
+    """
+    Resolve a model name to a local model file.
+
+    Resolution order:
+    1. If `model_name` is an existing file path, return it.
+    2. Look for `model_name` and `model_name.bin` in `models_dir`.
+    3. If no local file is found, fall back to downloading a built-in model.
+
+    :param model_name: A built-in model name, a custom model name, or a direct path to a model file.
+    :param models_dir: Directory to search for local models before downloading. Defaults to `MODELS_DIR`.
+    :return: Absolute path to the resolved model file.
+    """
+    if Path(model_name).is_file():
+        return str(Path(model_name).resolve())
+
+    search_dir = Path(models_dir) if models_dir is not None else MODELS_DIR
+
+    candidates = [
+        search_dir / model_name,
+        search_dir / f"{model_name}.bin",
+    ]
+
+    for candidate in candidates:
+        if candidate.is_file():
+            return str(candidate.resolve())
+
+    return download_model(model_name, search_dir)
+
+
 def to_timestamp(t: int, separator=',') -> str:
     """
     376 -> 00:00:03,760
