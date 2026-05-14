@@ -17,17 +17,10 @@ jobs:
         include:
           - platform: windows-latest
             cmake_args: -DGGML_BMI2=OFF
-            archflags: ""
           - platform: macos-14
             cmake_args: >-
               -DGGML_NATIVE=OFF 
               -DGGML_CPU_ARM_ARCH=armv8-a
-            # these were left for refrence 
-            # -DCMAKE_OSX_ARCHITECTURES=arm64;x86_64
-            # archflags: -arch arm64 -arch x86_64
-          - platform: ubuntu-latest
-            cmake_args: ""
-            archflags: ""
 
     runs-on: ${{ matrix.platform }}
 
