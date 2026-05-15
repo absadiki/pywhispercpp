@@ -37,7 +37,19 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04-arm, ubuntu-latest, windows-2022, macos-14]
+        include:
+          - os: ubuntu-24.04-arm
+            cmake_args: "-DGGML_NATIVE=OFF -DGGML_CPU_ARM_ARCH=armv8-a"
+          - os: ubuntu-latest
+            cmake_args: "-DGGML_NATIVE=OFF"
+          - os: windows-2022
+            # Whisper.cpp tries to use BMI2 on 32 bit Windows, so disable BMI2 when building on Windows to avoid that bug. See https://github.com/ggml-org/whisper.cpp/pull/3543
+            # If Windows still crashes after this, the next step would be disabling GGML_AVX, GGML_AVX2, GGML_FMA, and GGML_F16C with:
+            # -DGGML_AVX=OFF -DGGML_AVX2=OFF -DGGML_FMA=OFF -DGGML_F16C=OFF
+            # NOTE: these may also help the ubuntu-latest builds as well
+            cmake_args: "-DGGML_NATIVE=OFF -DGGML_BMI2=OFF -DGGML_AVX512=OFF -DGGML_AVX512_VBMI=OFF -DGGML_AVX512_VNNI=OFF -DGGML_AVX512_BF16=OFF"
+          - os: macos-14
+            cmake_args: "-DGGML_NATIVE=OFF"
 
     steps:
     - uses: actions/checkout@v6
@@ -56,8 +68,7 @@ jobs:
         CIBW_ARCHS: auto
          # for windows setup.py repairwheel step should solve it
         CIBW_SKIP: pp* cp38-*
-        # Whisper.cpp tries to use BMI2 on 32 bit Windows, so disable BMI2 when building on Windows to avoid that bug. See https://github.com/ggml-org/whisper.cpp/pull/3543
-        CIBW_ENVIRONMENT: CMAKE_ARGS="${{ contains(matrix.os, 'arm') && '-DGGML_NATIVE=OFF -DGGML_CPU_ARM_ARCH=armv8-a' || ''}} ${{ contains(matrix.os, 'windows') && '-DGGML_BMI2=OFF' || '' }}"
+        CIBW_ENVIRONMENT: CMAKE_ARGS="${{ matrix.cmake_args }}"
 
     - name: Verify clean directory
       run: git diff --exit-code
