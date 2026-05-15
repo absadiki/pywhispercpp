@@ -1,4 +1,6 @@
 include README.md LICENSE pybind11/LICENSE version.txt
+include pywhispercpp/model.pyi
+include pywhispercpp/py.typed
 graft pybind11/include
 graft pybind11/tools
 graft src
