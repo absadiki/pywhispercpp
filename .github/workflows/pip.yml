@@ -14,15 +14,22 @@ jobs:
       matrix:
         platform: [windows-latest, macos-14, ubuntu-latest]
         python-version: ["3.8", "3.11"]
+        include:
+          - platform: windows-latest
+            cmake_args: -DGGML_BMI2=OFF
+          - platform: macos-14
+            cmake_args: >-
+              -DGGML_NATIVE=OFF 
+              -DGGML_CPU_ARM_ARCH=armv8-a
 
     runs-on: ${{ matrix.platform }}
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
       with:
         submodules: true
 
-    - uses: actions/setup-python@v5
+    - uses: actions/setup-python@v6
       with:
         python-version: ${{ matrix.python-version }}
 
@@ -33,6 +40,9 @@ jobs:
       run: python -m pip install -r requirements.txt
 
     - name: Build and install
+      env:
+        CMAKE_ARGS: ${{ matrix.cmake_args }}
+        ARCHFLAGS: ${{ matrix.archflags }}
       run: pip install --verbose .[test]
 
 #    - name: Test C-API

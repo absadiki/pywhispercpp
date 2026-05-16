@@ -15,7 +15,7 @@ jobs:
     name: Build SDist
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
       with:
         submodules: true
 
@@ -25,7 +25,7 @@ jobs:
     - name: Check metadata
       run: pipx run twine check dist/*
 
-    - uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@v7
       with:
         name: artifact-sdist
         path: dist/*.tar.gz
@@ -37,15 +37,27 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04-arm, ubuntu-latest, windows-2022, macos-14]
+        include:
+          - os: ubuntu-24.04-arm
+            cmake_args: "-DGGML_NATIVE=OFF -DGGML_CPU_ARM_ARCH=armv8-a"
+          - os: ubuntu-latest
+            cmake_args: "-DGGML_NATIVE=OFF"
+          - os: windows-2022
+            # Whisper.cpp tries to use BMI2 on 32 bit Windows, so disable BMI2 when building on Windows to avoid that bug. See https://github.com/ggml-org/whisper.cpp/pull/3543
+            # If Windows still crashes after this, the next step would be disabling GGML_AVX, GGML_AVX2, GGML_FMA, and GGML_F16C with:
+            # -DGGML_AVX=OFF -DGGML_AVX2=OFF -DGGML_FMA=OFF -DGGML_F16C=OFF
+            # NOTE: these may also help the ubuntu-latest builds as well
+            cmake_args: "-DGGML_NATIVE=OFF -DGGML_BMI2=OFF -DGGML_AVX512=OFF -DGGML_AVX512_VBMI=OFF -DGGML_AVX512_VNNI=OFF -DGGML_AVX512_BF16=OFF"
+          - os: macos-14
+            cmake_args: "-DGGML_NATIVE=OFF"
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
       with:
         submodules: true
 
     # Used to host cibuildwheel
-    - uses: actions/setup-python@v5
+    - uses: actions/setup-python@v6
 
     - name: Install cibuildwheel
       run: python -m pip install cibuildwheel
@@ -56,8 +68,7 @@ jobs:
         CIBW_ARCHS: auto
          # for windows setup.py repairwheel step should solve it
         CIBW_SKIP: pp* cp38-*
-        # Whisper.cpp tries to use BMI2 on 32 bit Windows, so disable BMI2 when building on Windows to avoid that bug. See https://github.com/ggml-org/whisper.cpp/pull/3543
-        CIBW_ENVIRONMENT: CMAKE_ARGS="${{ contains(matrix.os, 'arm') && '-DGGML_NATIVE=OFF -DGGML_CPU_ARM_ARCH=armv8-a' || ''}} ${{ contains(matrix.os, 'windows') && '-DGGML_BMI2=OFF' || '' }}"
+        CIBW_ENVIRONMENT: CMAKE_ARGS="${{ matrix.cmake_args }}"
 
     - name: Verify clean directory
       run: git diff --exit-code
@@ -67,7 +78,7 @@ jobs:
       run: ls wheelhouse
 
     - name: Upload wheels
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: artifact-${{ matrix.os }}
         path: wheelhouse/*.whl
@@ -83,11 +94,11 @@ jobs:
         python-version: [3.11, 3.12, 3.13]
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
       with:
         submodules: true
 
-    - uses: actions/download-artifact@v4
+    - uses: actions/download-artifact@v8
       with:
         pattern: artifact-*
         merge-multiple: true
@@ -98,7 +109,7 @@ jobs:
         ls -l wheelhouse
 
     - name: Set up Python
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v6
       with:
         python-version: ${{ matrix.python-version }}
 
@@ -123,11 +134,11 @@ jobs:
     if: github.event_name == 'release' && github.event.action == 'published'
 
     steps:
-    - uses: actions/setup-python@v5
+    - uses: actions/setup-python@v6
       with:
         python-version: "3.x"
 
-    - uses: actions/download-artifact@v4
+    - uses: actions/download-artifact@v8
       with:
         pattern: artifact-*
         merge-multiple: true
