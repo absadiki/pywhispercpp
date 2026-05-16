@@ -9,6 +9,11 @@ _generate/
 *env*
 _version.py
 
+coverage
+libggml*
+libwhisper*
+updating
+
 # custom
 .idea
 _docs

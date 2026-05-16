@@ -11,7 +11,7 @@ import shutil
 import sys
 from pathlib import Path
 from time import time
-from typing import Union, Callable, List, TextIO, Tuple, Optional
+from typing import Any, Union, Callable, List, TextIO, Tuple, Optional, Dict
 import _pywhispercpp as pw
 import numpy as np
 import pywhispercpp.utils as utils
@@ -72,13 +72,14 @@ class Model:
 
     def __init__(self,
                  model: str = 'tiny',
-                 models_dir: str = None,
+                 models_dir: Optional[str] = None,
                  params_sampling_strategy: int = 0,
                  redirect_whispercpp_logs_to: Union[bool, TextIO, str, None] = False,
                  use_openvino: bool = False,
-                 openvino_model_path: str = None,
+                 openvino_model_path: Optional[str] = None,
                  openvino_device: str = 'CPU',
-                 openvino_cache_dir: str = None,
+                 openvino_cache_dir: Optional[str] = None,
+                 context_params: Union[Dict[str, Any], Any, None] = None,
                  **params):
         """
         :param model: The name of the model, one of the [AVAILABLE_MODELS](/pywhispercpp/#pywhispercpp.constants.AVAILABLE_MODELS),
@@ -96,6 +97,7 @@ class Model:
         """
         self.model_path = utils.resolve_model_path(model, models_dir)
         self._ctx = None
+        self._context_params = self._resolve_context_params(context_params)
         self._sampling_strategy = pw.whisper_sampling_strategy.WHISPER_SAMPLING_GREEDY if params_sampling_strategy == 0 else \
             pw.whisper_sampling_strategy.WHISPER_SAMPLING_BEAM_SEARCH
         self._params = pw.whisper_full_default_params(self._sampling_strategy)
@@ -112,8 +114,9 @@ class Model:
 
     def transcribe(self,
                    media: Union[str, np.ndarray],
-                   n_processors: int = None,
-                   new_segment_callback: Callable[[Segment], None] = None,
+                   n_processors: Optional[int] = None,
+                   new_segment_callback: Optional[Callable[[Segment], None]] = None,
+                   abort_callback: Optional[Callable[[], bool]] = None,
                    **params) -> List[Segment]:
         """
         Transcribes the media provided as input and returns list of `Segment` objects.
@@ -124,12 +127,13 @@ class Model:
                              binding to whisper.cpp/whisper_full_parallel
                              > Split the input audio in chunks and process each chunk separately using whisper_full()
         :param new_segment_callback: callback function that will be called when a new segment is generated
+        :param abort_callback: callback function returning True to abort an in-flight transcription early
         :param params: keyword arguments for different whisper.cpp parameters, see ::: constants.PARAMS_SCHEMA
         :param extract_probability: If True, calculates the geometric mean of token probabilities for each segment,
             providing a confidence score interpretable as a probability in [0, 1].
         :return: List of transcription segments
         """
-        if type(media) is np.ndarray:
+        if isinstance(media, np.ndarray):
             audio = media
         else:
             if not Path(media).exists():
@@ -146,6 +150,11 @@ class Model:
         if new_segment_callback:
             Model._new_segment_callback = new_segment_callback
             pw.assign_new_segment_callback(self._params, Model.__call_new_segment_callback)
+
+        if abort_callback is None:
+            pw.clear_abort_callback(self._params)
+        else:
+            pw.assign_abort_callback(self._params, abort_callback)
 
         # run inference
         start_time = time()
@@ -191,7 +200,7 @@ class Model:
                 else:
                     avg_prob = np.nan
 
-            res.append(Segment(t0, t1, text.strip(), probability=np.float32(avg_prob)))
+            res.append(Segment(t0, t1, text.strip(), probability=float(avg_prob)))
         return res
 
     def get_params(self) -> dict:
@@ -246,7 +255,7 @@ class Model:
         return pw.whisper_print_system_info()
 
     @staticmethod
-    def available_languages() -> list[str]:
+    def available_languages() -> List[str]:
         """
         Returns a list of supported language codes
 
@@ -258,6 +267,28 @@ class Model:
             res.append(pw.whisper_lang_str(i))
         return res
 
+    @staticmethod
+    def _resolve_context_params(context_params: Union[Dict[str, Any], Any, None]):
+        if context_params is None:
+            return None
+
+        if isinstance(context_params, dict):
+            resolved = pw.whisper_context_default_params()
+            for key, value in context_params.items():
+                setattr(resolved, key, value)
+            return resolved
+
+        return context_params
+
+    @staticmethod
+    def _normalize_params(kwargs: dict) -> dict:
+        normalized = dict(kwargs)
+
+        if 'suppress_non_speech_tokens' in normalized and 'suppress_nst' not in normalized:
+            normalized['suppress_nst'] = normalized.pop('suppress_non_speech_tokens')
+
+        return normalized
+
     def _init_model(self) -> None:
         """
         Private method to initialize the method from the bindings, it will be called automatically from the __init__
@@ -265,7 +296,10 @@ class Model:
         """
         logger.info("Initializing the model ...")
         with utils.redirect_stderr(to=self.redirect_whispercpp_logs_to):
-            self._ctx = pw.whisper_init_from_file(self.model_path)
+            if self._context_params is None:
+                self._ctx = pw.whisper_init_from_file(self.model_path)
+            else:
+                self._ctx = pw.whisper_init_from_file_with_params(self.model_path, self._context_params)
             if self.use_openvino:
                 pw.whisper_ctx_init_openvino_encoder(self._ctx, self.openvino_model_path, self.openvino_device, self.openvino_cache_dir)
 
@@ -277,10 +311,25 @@ class Model:
         :param kwargs: dict like object for the different params
         :return: None
         """
-        for param in kwargs:
-            setattr(self._params, param, kwargs[param])
+        normalized = self._normalize_params(kwargs)
+        prompt_tokens = normalized.pop('prompt_tokens', None) if 'prompt_tokens' in normalized else None
+        grammar = normalized.pop('grammar', None) if 'grammar' in normalized else None
+        grammar_rule = normalized.pop('grammar_rule', 'root') if 'grammar_rule' in normalized else 'root'
+        grammar_penalty = normalized.get('grammar_penalty', self._params.grammar_penalty)
 
-    def _transcribe(self, audio: np.ndarray, n_processors: int = None):
+        for param, value in normalized.items():
+            setattr(self._params, param, value)
+
+        if 'prompt_tokens' in kwargs:
+            self._params.set_prompt_tokens(prompt_tokens)
+
+        if 'grammar' in kwargs:
+            if grammar:
+                self._params.set_grammar(grammar, grammar_rule, grammar_penalty)
+            else:
+                self._params.clear_grammar()
+
+    def _transcribe(self, audio: np.ndarray, n_processors: Optional[int] = None):
         """
         Private method to call the whisper.cpp/whisper_full function
 
@@ -310,10 +359,11 @@ class Model:
         start = n - n_new
         res = Model._get_segments(ctx, start, n, False)
         for segment in res:
-            Model._new_segment_callback(segment)
+            if Model._new_segment_callback is not None:
+                Model._new_segment_callback(segment)
 
     @staticmethod
-    def _load_audio(media_file_path: str) -> np.array:
+    def _load_audio(media_file_path: str) -> np.ndarray:
         """
          Helper method to return a `np.array` object from a media file
          If the media file is not a WAV file, it will try to convert it using ffmpeg
@@ -369,7 +419,7 @@ class Model:
             finally:
                 os.remove(temp_file_path)
 
-    def auto_detect_language(self,  media: Union[str, np.ndarray], offset_ms: int = 0, n_threads: int = 4) -> Tuple[Tuple[str, np.float32], dict[str, np.float32]]:
+    def auto_detect_language(self,  media: Union[str, np.ndarray], offset_ms: int = 0, n_threads: int = 4) -> Tuple[Tuple[str, np.float32], Dict[str, np.float32]]:
         """
         Automatic language detection using whisper.cpp/whisper_pcm_to_mel and whisper.cpp/whisper_lang_auto_detect
 
@@ -378,7 +428,7 @@ class Model:
         :param n_threads: number of threads to use
         :return: ((detected_language, probability), probabilities for all languages)
         """
-        if type(media) is np.ndarray:
+        if isinstance(media, np.ndarray):
             audio = media
         else:
             if not Path(media).exists():
@@ -391,11 +441,12 @@ class Model:
         auto_detect = pw.whisper_lang_auto_detect(self._ctx, offset_ms, n_threads, probs)
         langs = self.available_languages()
         lang_probs = {langs[i]: probs[i] for i in range(lang_count)}
-        return (langs[auto_detect], probs[auto_detect]), lang_probs
+        return (langs[auto_detect], np.float32(probs[auto_detect])), lang_probs
 
     def __del__(self):
         """
         Free up resources
         :return: None
         """
-        pw.whisper_free(self._ctx)
+        if self._ctx is not None:
+            pw.whisper_free(self._ctx)

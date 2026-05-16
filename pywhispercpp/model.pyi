@@ -9,6 +9,7 @@ import numpy.typing as npt
 
 AudioArray = npt.NDArray[np.float32]
 AudioInput = Union[str, AudioArray]
+ContextParams = Union[Dict[str, Any], Any]
 
 
 class GreedyParams(TypedDict):
@@ -32,7 +33,12 @@ class Segment:
 
 
 class Model:
+    """
+    docuemnts strings
+    """
+  
     _new_segment_callback: Optional[Callable[[Segment], None]]
+    
 
     def __init__(
         self,
@@ -44,13 +50,15 @@ class Model:
         openvino_model_path: Optional[str] = None,
         openvino_device: str = 'CPU',
         openvino_cache_dir: Optional[str] = None,
+        context_params: Optional[ContextParams] = None,
         *,
         n_threads: Optional[int] = None,
         n_max_text_ctx: int = 16384,
         offset_ms: int = 0,
         duration_ms: int = 0,
         translate: bool = False,
-        no_context: bool = False,
+        no_context: bool = True,
+        no_timestamps: bool = False,
         single_segment: bool = False,
         print_special: bool = False,
         print_progress: bool = True,
@@ -62,13 +70,20 @@ class Model:
         max_len: int = 0,
         split_on_word: bool = False,
         max_tokens: int = 0,
+        debug_mode: bool = False,
         audio_ctx: int = 0,
+        tdrz_enable: bool = False,
         initial_prompt: Optional[str] = None,
+        grammar: Optional[str] = None,
+        grammar_rule: str = 'root',
         prompt_tokens: Optional[Tuple[Any, ...]] = None,
         prompt_n_tokens: int = 0,
-        language: str = '',
+        carry_initial_prompt: bool = False,
+        language: str = 'en',
+        detect_language: bool = False,
         suppress_blank: bool = True,
         suppress_non_speech_tokens: bool = False,
+        suppress_nst: bool = False,
         temperature: float = 0.0,
         max_initial_ts: float = 1.0,
         length_penalty: float = -1.0,
@@ -76,8 +91,9 @@ class Model:
         entropy_thold: float = 2.4,
         logprob_thold: float = -1.0,
         no_speech_thold: float = 0.6,
-        greedy: GreedyParams = {'best_of': -1},
-        beam_search: BeamSearchParams = {'beam_size': -1, 'patience': -1.0},
+        grammar_penalty: float = 100.0,
+        greedy: GreedyParams = {'best_of': 5},
+        beam_search: BeamSearchParams = {'beam_size': 5, 'patience': -1.0},
         vad: bool = False,
         vad_model_path: Optional[str] = None,
     )->None: ...
@@ -87,13 +103,15 @@ class Model:
         media: AudioInput,
         n_processors: Optional[int] = None,
         new_segment_callback: Optional[Callable[[Segment], None]] = None,
+        abort_callback: Optional[Callable[[], bool]] = None,
         *,
         n_threads: Optional[int] = None,
         n_max_text_ctx: int = 16384,
         offset_ms: int = 0,
         duration_ms: int = 0,
         translate: bool = False,
-        no_context: bool = False,
+        no_context: bool = True,
+        no_timestamps: bool = False,
         single_segment: bool = False,
         print_special: bool = False,
         print_progress: bool = True,
@@ -105,13 +123,20 @@ class Model:
         max_len: int = 0,
         split_on_word: bool = False,
         max_tokens: int = 0,
+        debug_mode: bool = False,
         audio_ctx: int = 0,
+        tdrz_enable: bool = False,
         initial_prompt: Optional[str] = None,
+        grammar: Optional[str] = None,
+        grammar_rule: str = 'root',
         prompt_tokens: Optional[Tuple[Any, ...]] = None,
         prompt_n_tokens: int = 0,
-        language: str = '',
+        carry_initial_prompt: bool = False,
+        language: str = 'en',
+        detect_language: bool = False,
         suppress_blank: bool = True,
         suppress_non_speech_tokens: bool = False,
+        suppress_nst: bool = False,
         temperature: float = 0.0,
         max_initial_ts: float = 1.0,
         length_penalty: float = -1.0,
@@ -119,8 +144,9 @@ class Model:
         entropy_thold: float = 2.4,
         logprob_thold: float = -1.0,
         no_speech_thold: float = 0.6,
-        greedy: GreedyParams = {'best_of': -1},
-        beam_search: BeamSearchParams = {'beam_size': -1, 'patience': -1.0},
+        grammar_penalty: float = 100.0,
+        greedy: GreedyParams = {'best_of': 5},
+        beam_search: BeamSearchParams = {'beam_size': 5, 'patience': -1.0},
         extract_probability: bool = False,
         vad: bool = False,
         vad_model_path: Optional[str] = None,

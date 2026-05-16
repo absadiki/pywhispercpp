@@ -8,6 +8,7 @@ import unittest
 from pathlib import Path
 from unittest import TestCase
 
+import _pywhispercpp as pw
 from pywhispercpp.model import Model, Segment
 
 if __name__ == '__main__':
@@ -43,6 +44,62 @@ class TestModel(TestCase):
     def test_auto_detect_language(self):
         detected_language, probs = self.model.auto_detect_language(str(self.audio_file))
         return self.assertIsInstance(detected_language, tuple) and self.assertEqual(detected_language[0], 'en')
+
+    def test_context_params_dict_init(self):
+        model = Model(
+            "tiny",
+            models_dir=str(WHISPER_CPP_DIR/'models'),
+            context_params={"use_gpu": False, "flash_attn": False},
+        )
+        self.assertIsInstance(model, Model)
+
+    def test_compat_alias_for_non_speech_tokens(self):
+        model = Model(
+            "tiny",
+            models_dir=str(WHISPER_CPP_DIR/'models'),
+            suppress_non_speech_tokens=True,
+        )
+        self.assertTrue(model.get_params()["suppress_nst"])
+
+    def test_prompt_token_helper_exists(self):
+        params = pw.whisper_full_default_params(
+            pw.whisper_sampling_strategy.WHISPER_SAMPLING_GREEDY
+        )
+        params.set_prompt_tokens((1, 2, 3))
+        self.assertEqual(params.prompt_n_tokens, 3)
+
+    def test_grammar_helper_exists(self):
+        params = pw.whisper_full_default_params(
+            pw.whisper_sampling_strategy.WHISPER_SAMPLING_GREEDY
+        )
+        params.set_grammar('root ::= "yes" | "no"', 'root', 42.0)
+        self.assertEqual(params.grammar_penalty, 42.0)
+        params.clear_grammar()
+
+    def test_model_accepts_grammar_param(self):
+        model = Model(
+            "tiny",
+            models_dir=str(WHISPER_CPP_DIR/'models'),
+            grammar='root ::= "yes" | "no"',
+            grammar_rule='root',
+            grammar_penalty=42.0,
+        )
+        self.assertIsInstance(model, Model)
+
+    def test_model_metadata_bindings(self):
+        self.assertIsInstance(pw.whisper_model_type_readable(self.model._ctx), str)
+        self.assertGreater(pw.whisper_model_n_vocab(self.model._ctx), 0)
+        self.assertGreater(pw.whisper_model_n_audio_ctx(self.model._ctx), 0)
+        self.assertGreater(pw.whisper_model_n_text_ctx(self.model._ctx), 0)
+
+    def test_speaker_turn_accessor_smoke(self):
+        self.model.transcribe(str(self.audio_file))
+        segment_count = pw.whisper_full_n_segments(self.model._ctx)
+        self.assertGreater(segment_count, 0)
+        self.assertIsInstance(
+            pw.whisper_full_get_segment_speaker_turn_next(self.model._ctx, 0),
+            bool,
+        )
 
 
 if __name__ == '__main__':
