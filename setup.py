@@ -77,6 +77,7 @@ class CMakeBuild(build_ext):
                     "-DCMAKE_INSTALL_RPATH=@loader_path",
                     "-DCMAKE_BUILD_WITH_INSTALL_RPATH=ON"
                 ]
+                
             elif sys.platform.startswith('linux'):
                 # Linux-specific settings
                 cmake_args += [
@@ -132,6 +133,11 @@ class CMakeBuild(build_ext):
                 build_args += ["--config", cfg]
 
         if sys.platform.startswith("darwin"):
+          
+            os.environ.setdefault("MACOSX_DEPLOYMENT_TARGET", "14.0")
+            cmake_args += [
+                f"-DCMAKE_OSX_DEPLOYMENT_TARGET={os.environ['MACOSX_DEPLOYMENT_TARGET']}"
+            ]
             # Cross-compile support for macOS - respect ARCHFLAGS if set
             archs = re.findall(r"-arch (\S+)", os.environ.get("ARCHFLAGS", ""))
             if archs:
@@ -191,7 +197,8 @@ class RepairWheel(bdist_wheel):
         if os.environ.get('NO_REPAIR', '0') == '1':
             print("Skipping wheel repair")
             return
-        if os.environ.get('CIBUILDWHEEL', '0') == '0' or sys.platform.startswith('win'):
+        # if os.environ.get('CIBUILDWHEEL', '0') == '0' or sys.platform.startswith('win'):
+        if sys.platform.startswith('win'):
             # for linux and macos we use the default wheel repair command from cibuildwheel, for windows we need to do it manually as there is no repair command
             self.repair_wheel()
 
