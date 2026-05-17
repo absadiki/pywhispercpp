@@ -95,18 +95,67 @@ class Model:
                  context_params: Optional[ContextParams] = None,
                  **params):
         """
-        :param model: The name of the model, one of the [AVAILABLE_MODELS](/pywhispercpp/#pywhispercpp.constants.AVAILABLE_MODELS),
-                        (default to `tiny`), or a direct path to a `ggml` model.
-        :param models_dir: The directory where the models are stored, or where they will be downloaded if they don't
-                            exist, default to [MODELS_DIR](/pywhispercpp/#pywhispercpp.constants.MODELS_DIR) <user_data_dir/pywhsipercpp/models>
-        :param params_sampling_strategy: 0 -> GREEDY, else BEAM_SEARCH
-        :param redirect_whispercpp_logs_to: where to redirect the whisper.cpp logs, default to False (no redirection), accepts str file path, sys.stdout, sys.stderr, or use None to redirect to devnull
-        :param use_openvino: whether to use OpenVINO or not
-        :param openvino_model_path: path to the OpenVINO model
-        :param openvino_device: OpenVINO device, default to CPU
-        :param openvino_cache_dir: OpenVINO cache directory
-        :param params: keyword arguments for different whisper.cpp parameters,
-                        see [PARAMS_SCHEMA](/pywhispercpp/#pywhispercpp.constants.PARAMS_SCHEMA)
+        :param model: model name, default `tiny`, or a direct path to a ggml model file.
+        :param models_dir: directory containing model files; if omitted, uses `MODELS_DIR` unless `model`
+                           is already a direct file path.
+        :param params_sampling_strategy: sampling strategy selector; `0` uses greedy decoding and any
+                                         other value uses beam search.
+        :param redirect_whispercpp_logs_to: log redirection target. Use `False` for no redirection, `None`
+                                            for `/dev/null`, a file path string, or `sys.stdout`/`sys.stderr`.
+        :param use_openvino: whether to initialize the OpenVINO encoder backend.
+        :param openvino_model_path: path to the OpenVINO model directory or files.
+        :param openvino_device: OpenVINO device name, default `CPU`.
+        :param openvino_cache_dir: OpenVINO cache directory.
+        :param context_params: optional whisper context loader params. Accepted keys are `use_gpu`,
+                               `flash_attn`, `gpu_device`, `dtw_token_timestamps`,
+                               `dtw_aheads_preset`, `dtw_n_top`, and `dtw_mem_size`. Omitted keys inherit
+                               from `whisper_context_default_params()`.
+        :param params: decode parameters forwarded to `whisper_full_params`.
+            Supported keys:
+            - `n_threads`: number of inference threads. Default is `min(4, hardware_concurrency())`.
+            - `n_max_text_ctx`: max prompt-text tokens carried into the decoder. Default `16384`.
+            - `offset_ms`: audio start offset in milliseconds. Default `0`.
+            - `duration_ms`: audio duration to process in milliseconds. Default `0`.
+            - `translate`: translate output to English. Default `False`.
+            - `no_context`: disable reuse of past transcription context. Default `True`.
+            - `no_timestamps`: disable timestamp generation. Default `False`.
+            - `single_segment`: force a single output segment. Default `False`.
+            - `print_special`: print special tokens. Default `False`.
+            - `print_progress`: print progress information. Default `True`.
+            - `print_realtime`: print realtime output from whisper.cpp. Default `False`.
+            - `print_timestamps`: print timestamps during realtime output. Default `True`.
+            - `token_timestamps`: enable token-level timestamps. Default `False`.
+            - `thold_pt`: token timestamp probability threshold. Default `0.01`.
+            - `thold_ptsum`: token timestamp sum threshold. Default `0.01`.
+            - `max_len`: max segment length in characters. Default `0`.
+            - `split_on_word`: split on words when `max_len` is used. Default `False`.
+            - `max_tokens`: max tokens per segment. Default `0`.
+            - `debug_mode`: enable whisper.cpp debug mode. Default `False`.
+            - `audio_ctx`: override audio context size. Default `0`.
+            - `tdrz_enable`: enable tinydiarize speaker-turn detection. Default `False`.
+            - `initial_prompt`: initial text prompt prepended before decoding. Default `None`.
+            - `grammar`: GBNF grammar text or path to a grammar file. Default `None`.
+            - `grammar_rule`: top-level grammar rule name. Default `root` when grammar is used.
+            - `prompt_tokens`: explicit prompt token sequence. Default `None`.
+            - `prompt_n_tokens`: number of prompt tokens. Default `0`.
+            - `carry_initial_prompt`: prepend the initial prompt to each decode window. Default `False`.
+            - `language`: language code. Default `en`.
+            - `detect_language`: enable automatic language detection during transcription. Default `False`.
+            - `suppress_blank`: suppress blank outputs. Default `True`.
+            - `suppress_non_speech_tokens`: Python alias for `suppress_nst`. Default `False`.
+            - `suppress_nst`: suppress non-speech tokens. Default `False`.
+            - `temperature`: initial decoding temperature. Default `0.0`.
+            - `max_initial_ts`: maximum initial timestamp. Default `1.0`.
+            - `length_penalty`: length penalty. Default `-1.0`.
+            - `temperature_inc`: fallback temperature increment. Default `0.2`.
+            - `entropy_thold`: entropy threshold. Default `2.4`.
+            - `logprob_thold`: logprob threshold. Default `-1.0`.
+            - `no_speech_thold`: no-speech threshold. Default `0.6`.
+            - `grammar_penalty`: penalty applied to non-grammar tokens. Default `100.0`.
+            - `greedy`: greedy-decoder settings, typically `{"best_of": 5}`.
+            - `beam_search`: beam-search settings, schema default `{"beam_size": 5, "patience": -1.0}`.
+            - `vad`: enable VAD. Default `False`.
+            - `vad_model_path`: path to the VAD model. Default `None`.
         """
         self.model_path = utils.resolve_model_path(model, models_dir)
         self._ctx = None
@@ -136,12 +185,12 @@ class Model:
         Accepts a media_file path (audio/video) or a raw numpy array.
 
         :param media: Media file path or a numpy array
-        :param n_processors: if not None, it will run the transcription on multiple processes
-                             binding to whisper.cpp/whisper_full_parallel
-                             > Split the input audio in chunks and process each chunk separately using whisper_full()
-        :param new_segment_callback: callback function that will be called when a new segment is generated
+        :param n_processors: number of worker processes for `whisper_full_parallel`. If omitted, runs a
+                     single-process `whisper_full()` decode.
+        :param new_segment_callback: callback invoked for each newly produced `Segment` during decoding.
         :param abort_callback: callback function returning True to abort an in-flight transcription early
-        :param params: keyword arguments for different whisper.cpp parameters, see ::: constants.PARAMS_SCHEMA
+        :param params: keyword arguments for different whisper.cpp parameters; these override the model's
+                       active decode params for this call
         :param extract_probability: If True, calculates the geometric mean of token probabilities for each segment,
             providing a confidence score interpretable as a probability in [0, 1].
         :return: List of transcription segments
@@ -437,8 +486,8 @@ class Model:
         Automatic language detection using whisper.cpp/whisper_pcm_to_mel and whisper.cpp/whisper_lang_auto_detect
 
         :param media: Media file path or a numpy array
-        :param offset_ms: offset in milliseconds, defaults to the model's configured offset
-        :param n_threads: number of threads to use, defaults to the model's configured thread count
+        :param offset_ms: offset in milliseconds; when omitted, uses the model's current `offset_ms`
+        :param n_threads: number of threads to use; when omitted, uses the model's current `n_threads`
         :return: ((detected_language, probability), probabilities for all languages)
         """
         if isinstance(media, np.ndarray):

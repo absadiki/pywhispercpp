@@ -42,10 +42,7 @@ class Segment:
 
 
 class Model:
-    """
-    docuemnts strings
-    """
-  
+
     _new_segment_callback: Optional[Callable[[Segment], None]]
     
 
