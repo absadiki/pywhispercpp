@@ -7,7 +7,7 @@ _generate/
 *.py[cod]
 *.egg-info
 *env*
-
+_version.py
 
 # custom
 .idea
