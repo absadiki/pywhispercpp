@@ -1072,8 +1072,18 @@ PYBIND11_MODULE(_pywhispercpp, m) {
                                  [](WhisperFullParamsWrapper &self, py::dict dict) {self.greedy.best_of = dict["best_of"].cast<int>();})
         .def_property("beam_search", [](WhisperFullParamsWrapper &self) {return py::dict("beam_size"_a=self.beam_search.beam_size, "patience"_a=self.beam_search.patience);},
                                 [](WhisperFullParamsWrapper &self, py::dict dict) {self.beam_search.beam_size = dict["beam_size"].cast<int>(); self.beam_search.patience = dict["patience"].cast<float>();})
-           .def("set_grammar", &WhisperFullParamsWrapper::set_grammar,
-               py::arg("grammar"), py::arg("rule_name") = "", py::arg("penalty") = -1.0f,
+           .def("set_grammar",
+               [](WhisperFullParamsWrapper &self, py::object grammar, py::object rule_name, float penalty) {
+                   if (grammar.is_none()) {
+                       self.clear_grammar();
+                       return;
+                   }
+
+                   const std::string grammar_input = grammar.cast<std::string>();
+                   const std::string rule_name_str = rule_name.is_none() ? "" : rule_name.cast<std::string>();
+                   self.set_grammar(grammar_input, rule_name_str, penalty);
+               },
+               py::arg("grammar"), py::arg("rule_name") = py::none(), py::arg("penalty") = -1.0f,
                "Parse GBNF grammar text or a grammar file path and store the resulting grammar in C++-owned memory.")
            .def("clear_grammar", &WhisperFullParamsWrapper::clear_grammar,
                "Clear any previously configured grammar from the parameter object.")

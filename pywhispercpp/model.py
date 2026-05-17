@@ -11,7 +11,7 @@ import shutil
 import sys
 from pathlib import Path
 from time import time
-from typing import Any, Union, Callable, List, TextIO, Tuple, Optional, Dict
+from typing import Any, Union, Callable, List, TextIO, Tuple, Optional, Dict, TypedDict
 import _pywhispercpp as pw
 import numpy as np
 import pywhispercpp.utils as utils
@@ -27,6 +27,19 @@ __license__ = "MIT"
 __version__ = importlib.metadata.version('pywhispercpp')
 
 logger = logging.getLogger(__name__)
+
+
+class ContextParams(TypedDict, total=False):
+    use_gpu: bool
+    flash_attn: bool
+    gpu_device: int
+    dtw_token_timestamps: bool
+    dtw_aheads_preset: int
+    dtw_n_top: int
+    dtw_mem_size: int
+
+
+_CONTEXT_PARAM_KEYS = frozenset(ContextParams.__annotations__)
 
 
 class Segment:
@@ -79,7 +92,7 @@ class Model:
                  openvino_model_path: Optional[str] = None,
                  openvino_device: str = 'CPU',
                  openvino_cache_dir: Optional[str] = None,
-                 context_params: Union[Dict[str, Any], Any, None] = None,
+                 context_params: Optional[ContextParams] = None,
                  **params):
         """
         :param model: The name of the model, one of the [AVAILABLE_MODELS](/pywhispercpp/#pywhispercpp.constants.AVAILABLE_MODELS),
@@ -151,10 +164,7 @@ class Model:
             Model._new_segment_callback = new_segment_callback
             pw.assign_new_segment_callback(self._params, Model.__call_new_segment_callback)
 
-        if abort_callback is None:
-            pw.clear_abort_callback(self._params)
-        else:
-            pw.assign_abort_callback(self._params, abort_callback)
+        pw.assign_abort_callback(self._params, abort_callback)
 
         # run inference
         start_time = time()
@@ -268,17 +278,23 @@ class Model:
         return res
 
     @staticmethod
-    def _resolve_context_params(context_params: Union[Dict[str, Any], Any, None]):
+    def _resolve_context_params(context_params: Optional[ContextParams]):
         if context_params is None:
             return None
 
-        if isinstance(context_params, dict):
-            resolved = pw.whisper_context_default_params()
-            for key, value in context_params.items():
-                setattr(resolved, key, value)
-            return resolved
+        if not isinstance(context_params, dict):
+            raise TypeError("context_params must be a ContextParams dict or None")
 
-        return context_params
+        unknown_keys = sorted(set(context_params) - _CONTEXT_PARAM_KEYS)
+        if unknown_keys:
+            raise TypeError(
+                f"Unknown context_params keys: {', '.join(unknown_keys)}"
+            )
+
+        resolved = pw.whisper_context_default_params()
+        for key, value in context_params.items():
+            setattr(resolved, key, value)
+        return resolved
 
     @staticmethod
     def _normalize_params(kwargs: dict) -> dict:
@@ -314,7 +330,7 @@ class Model:
         normalized = self._normalize_params(kwargs)
         prompt_tokens = normalized.pop('prompt_tokens', None) if 'prompt_tokens' in normalized else None
         grammar = normalized.pop('grammar', None) if 'grammar' in normalized else None
-        grammar_rule = normalized.pop('grammar_rule', 'root') if 'grammar_rule' in normalized else 'root'
+        grammar_rule = normalized.pop('grammar_rule', None) if 'grammar_rule' in normalized else None
         grammar_penalty = normalized.get('grammar_penalty', self._params.grammar_penalty)
 
         for param, value in normalized.items():
@@ -324,10 +340,7 @@ class Model:
             self._params.set_prompt_tokens(prompt_tokens)
 
         if 'grammar' in kwargs:
-            if grammar:
-                self._params.set_grammar(grammar, grammar_rule, grammar_penalty)
-            else:
-                self._params.clear_grammar()
+            self._params.set_grammar(grammar, grammar_rule, grammar_penalty)
 
     def _transcribe(self, audio: np.ndarray, n_processors: Optional[int] = None):
         """
@@ -419,13 +432,13 @@ class Model:
             finally:
                 os.remove(temp_file_path)
 
-    def auto_detect_language(self,  media: Union[str, np.ndarray], offset_ms: int = 0, n_threads: int = 4) -> Tuple[Tuple[str, np.float32], Dict[str, np.float32]]:
+    def auto_detect_language(self, media: Union[str, np.ndarray], offset_ms: Optional[int] = None, n_threads: Optional[int] = None) -> Tuple[Tuple[str, np.float32], Dict[str, np.float32]]:
         """
         Automatic language detection using whisper.cpp/whisper_pcm_to_mel and whisper.cpp/whisper_lang_auto_detect
 
         :param media: Media file path or a numpy array
-        :param offset_ms: offset in milliseconds
-        :param n_threads: number of threads to use
+        :param offset_ms: offset in milliseconds, defaults to the model's configured offset
+        :param n_threads: number of threads to use, defaults to the model's configured thread count
         :return: ((detected_language, probability), probabilities for all languages)
         """
         if isinstance(media, np.ndarray):
@@ -434,6 +447,12 @@ class Model:
             if not Path(media).exists():
                 raise FileNotFoundError(media)
             audio = self._load_audio(media)
+
+        if offset_ms is None:
+            offset_ms = self._params.offset_ms
+
+        if n_threads is None:
+            n_threads = self._params.n_threads
 
         pw.whisper_pcm_to_mel(self._ctx, audio, len(audio), n_threads)
         lang_count = self.lang_max_id() + 1

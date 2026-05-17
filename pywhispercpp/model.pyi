@@ -9,7 +9,16 @@ import numpy.typing as npt
 
 AudioArray = npt.NDArray[np.float32]
 AudioInput = Union[str, AudioArray]
-ContextParams = Union[Dict[str, Any], Any]
+
+
+class ContextParams(TypedDict, total=False):
+    use_gpu: bool
+    flash_attn: bool
+    gpu_device: int
+    dtw_token_timestamps: bool
+    dtw_aheads_preset: int
+    dtw_n_top: int
+    dtw_mem_size: int
 
 
 class GreedyParams(TypedDict):
@@ -167,8 +176,8 @@ class Model:
     def auto_detect_language(
         self,
         media: AudioInput,
-        offset_ms: int = 0,
-        n_threads: int = 4,
+        offset_ms: Optional[int] = None,
+        n_threads: Optional[int] = None,
     ) -> Tuple[Tuple[str, np.float32], Dict[str, np.float32]]: ...
     def __del__(self) -> None: ...
 
