@@ -377,19 +377,9 @@ class Model:
         :return: None
         """
         normalized = self._normalize_params(kwargs)
-        prompt_tokens = normalized.pop('prompt_tokens', None) if 'prompt_tokens' in normalized else None
-        grammar = normalized.pop('grammar', None) if 'grammar' in normalized else None
-        grammar_rule = normalized.pop('grammar_rule', None) if 'grammar_rule' in normalized else None
-        grammar_penalty = normalized.get('grammar_penalty', self._params.grammar_penalty)
 
         for param, value in normalized.items():
             setattr(self._params, param, value)
-
-        if 'prompt_tokens' in kwargs:
-            self._params.set_prompt_tokens(prompt_tokens)
-
-        if 'grammar' in kwargs:
-            self._params.set_grammar(grammar, grammar_rule, grammar_penalty)
 
     def _transcribe(self, audio: np.ndarray, n_processors: Optional[int] = None):
         """

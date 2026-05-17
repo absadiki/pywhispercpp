@@ -194,18 +194,6 @@ PARAMS_SCHEMA = {  # as exactly presented in whisper.cpp
             'options': None,
             'default': None
     },
-    'grammar': {
-            'type': str,
-            'description': "GBNF grammar text or a path to a grammar file",
-            'options': None,
-            'default': None
-    },
-    'grammar_rule': {
-            'type': str,
-            'description': "top-level GBNF grammar rule name",
-            'options': None,
-            'default': 'root'
-    },
     'prompt_tokens': {
             'type': Tuple,
             'description': "tokens to provide to the whisper decoder as initial prompt",
