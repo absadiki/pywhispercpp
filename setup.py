@@ -258,7 +258,7 @@ setup(
     packages=find_packages('.'),
     package_dir={'': '.'},
     include_package_data=True,
-    package_data={'pywhispercpp': []},
+    package_data={'pywhispercpp': ["*.pyi", "py.typed"]},
     long_description_content_type="text/markdown",
     license='MIT',
     entry_points={
