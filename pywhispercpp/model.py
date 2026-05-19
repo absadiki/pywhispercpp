@@ -354,6 +354,43 @@ class Model:
 
         return normalized
 
+    def _apply_grammar_params(self, normalized: dict) -> dict:
+        has_grammar = 'grammar' in normalized
+        has_grammar_rule = 'grammar_rule' in normalized
+
+        if not has_grammar:
+            if has_grammar_rule:
+                raise AttributeError('grammar_rule requires grammar')
+            return normalized
+
+        grammar = normalized.pop('grammar')
+        grammar_rule = normalized.pop('grammar_rule', 'root')
+
+        if grammar is None:
+            self._params.clear_grammar()
+            return normalized
+
+        self._params.set_grammar(
+            grammar,
+            grammar_rule,
+            normalized.get('grammar_penalty', self._params.grammar_penalty),
+        )
+        return normalized
+
+    def _apply_prompt_token_params(self, normalized: dict) -> dict:
+        if 'prompt_tokens' not in normalized:
+            return normalized
+
+        prompt_tokens = normalized.pop('prompt_tokens')
+        normalized.pop('prompt_n_tokens', None)
+
+        if prompt_tokens is None:
+            self._params.clear_prompt_tokens()
+        else:
+            self._params.set_prompt_tokens(prompt_tokens)
+
+        return normalized
+
     def _init_model(self) -> None:
         """
         Private method to initialize the method from the bindings, it will be called automatically from the __init__
@@ -377,6 +414,12 @@ class Model:
         :return: None
         """
         normalized = self._normalize_params(kwargs)
+
+        if 'grammar' in normalized or 'grammar_rule' in normalized:
+            normalized = self._apply_grammar_params(normalized)
+
+        if 'prompt_tokens' in normalized:
+            normalized = self._apply_prompt_token_params(normalized)
 
         for param, value in normalized.items():
             setattr(self._params, param, value)
