@@ -95,6 +95,12 @@ PARAMS_SCHEMA = {  # as exactly presented in whisper.cpp
             'type': bool,
             'description': "do not use past transcription (if any) as initial prompt for the decoder",
             'options': None,
+            'default': True
+    },
+    'no_timestamps': {
+            'type': bool,
+            'description': "do not generate timestamps",
+            'options': None,
             'default': False
     },
     'single_segment': {
@@ -164,11 +170,23 @@ PARAMS_SCHEMA = {  # as exactly presented in whisper.cpp
             'options': None,
             'default': 0
     },
+    'debug_mode': {
+            'type': bool,
+            'description': "enable debug mode in whisper.cpp",
+            'options': None,
+            'default': False
+    },
     'audio_ctx': {
             'type': int,
             'description': "overwrite the audio context size (0 = use default)",
             'options': None,
             'default': 0
+    },
+    'tdrz_enable': {
+            'type': bool,
+            'description': "enable tinydiarize speaker turn detection",
+            'options': None,
+            'default': False
     },
     'initial_prompt': {
             'type': str,
@@ -188,11 +206,23 @@ PARAMS_SCHEMA = {  # as exactly presented in whisper.cpp
             'options': None,
             'default': 0
     },
+    'carry_initial_prompt': {
+            'type': bool,
+            'description': "always prepend the initial prompt to each decode window",
+            'options': None,
+            'default': False
+    },
     'language': {
             'type': str,
             'description': 'for auto-detection, set to None, "" or "auto"',
             'options': None,
-            'default': ""
+            'default': "en"
+    },
+    'detect_language': {
+            'type': bool,
+            'description': 'enable automatic language detection during transcription',
+            'options': None,
+            'default': False
     },
     'suppress_blank': {
             'type': bool,
@@ -203,6 +233,12 @@ PARAMS_SCHEMA = {  # as exactly presented in whisper.cpp
     'suppress_non_speech_tokens': {
             'type': bool,
             'description': 'common decoding parameters',
+            'options': None,
+            'default': False
+    },
+    'suppress_nst': {
+            'type': bool,
+            'description': 'canonical whisper.cpp name for non-speech token suppression',
             'options': None,
             'default': False
     },
@@ -248,23 +284,29 @@ PARAMS_SCHEMA = {  # as exactly presented in whisper.cpp
             'options': None,
             'default': 0.6
     },
+    'grammar_penalty': {
+            'type': float,
+            'description': 'scales down logits of non-grammar tokens',
+            'options': None,
+            'default': 100.0
+    },
     'greedy': {
             'type': dict,
             'description': 'greedy',
             'options': None,
-            'default': {"best_of": -1}
+            'default': {"best_of": 5}
     },
     'beam_search': {
             'type': dict,
             'description': 'beam_search',
             'options': None,
-            'default': {"beam_size": -1, "patience": -1.0}
+            'default': {"beam_size": 5, "patience": -1.0}
     },
     'extract_probability': {
             'type': bool,
             'description': 'calculate the geometric mean of token probabilities for each segment.',
             'options': None,
-            'default': True
+            'default': False
     },
     'vad': {
         'type': bool,

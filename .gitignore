@@ -7,7 +7,15 @@ _generate/
 *.py[cod]
 *.egg-info
 *env*
+# install -e artifacts
 _version.py
+libggml*
+libwhisper*
+
+# ignore downloaded source code... really this is just for quickly checking previous versions
+pywhispercpp-*.*
+
+
 
 # custom
 .idea
