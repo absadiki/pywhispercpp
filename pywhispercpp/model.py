@@ -81,7 +81,7 @@ class Model:
     ```
     """
 
-    _new_segment_callback = None
+    
 
     def __init__(self,
                  model: str = 'tiny',
@@ -144,6 +144,7 @@ class Model:
             - `suppress_blank`: suppress blank outputs. Default `True`.
             - `suppress_non_speech_tokens`: Python alias for `suppress_nst`. Default `False`.
             - `suppress_nst`: suppress non-speech tokens. Default `False`.
+            - `suppress_regex`: regex pattern used to suppress matching text during decoding. Default `''`.
             - `temperature`: initial decoding temperature. Default `0.0`.
             - `max_initial_ts`: maximum initial timestamp. Default `1.0`.
             - `length_penalty`: length penalty. Default `-1.0`.
@@ -153,7 +154,7 @@ class Model:
             - `no_speech_thold`: no-speech threshold. Default `0.6`.
             - `grammar_penalty`: penalty applied to non-grammar tokens. Default `100.0`.
             - `greedy`: greedy-decoder settings, typically `{"best_of": 5}`.
-            - `beam_search`: beam-search settings, schema default `{"beam_size": 5, "patience": -1.0}`.
+            - `beam_search`: beam-search settings, schema default `{"beam_size": -1, "patience": -1.0}`.
             - `vad`: enable VAD. Default `False`.
             - `vad_model_path`: path to the VAD model. Default `None`.
         """
@@ -171,6 +172,8 @@ class Model:
         self.openvino_model_path = openvino_model_path
         self.openvino_device = openvino_device
         self.openvino_cache_dir = openvino_cache_dir
+        # todo... maybe setup default callbacks for segments and abort globaly and/or per model instance?
+        self._new_segment_callback = None
         # init the model
         self._init_model()
 
@@ -208,10 +211,13 @@ class Model:
         # update params if any
         self._set_params(params)
 
-        # setting up callback
-        if new_segment_callback:
-            Model._new_segment_callback = new_segment_callback
-            pw.assign_new_segment_callback(self._params, Model.__call_new_segment_callback)
+        # setting up callback. make sure self._new_segment_callback = None when new_segment_callback = None.
+        # since this is no lonmger bound to the Model but on self 
+        self._new_segment_callback = new_segment_callback
+        pw.assign_new_segment_callback(
+            self._params,
+            self.__call_new_segment_callback if new_segment_callback is not None else None,
+        )
 
         pw.assign_abort_callback(self._params, abort_callback)
 
@@ -441,8 +447,8 @@ class Model:
         res = Model._get_segments(self._ctx, 0, n, self.extract_probability)
         return res
 
-    @staticmethod
-    def __call_new_segment_callback(ctx, n_new, user_data) -> None:
+    
+    def __call_new_segment_callback(self, ctx, n_new, user_data=None) -> None:
         """
         Internal new_segment_callback, it just calls the user's callback with the `Segment` object
         :param ctx: whisper.cpp ctx param
@@ -454,8 +460,8 @@ class Model:
         start = n - n_new
         res = Model._get_segments(ctx, start, n, False)
         for segment in res:
-            if Model._new_segment_callback is not None:
-                Model._new_segment_callback(segment)
+            if self._new_segment_callback is not None:
+                self._new_segment_callback(segment)
 
     @staticmethod
     def _load_audio(media_file_path: str) -> np.ndarray:

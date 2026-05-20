@@ -32,6 +32,10 @@
 namespace py = pybind11;
 using namespace pybind11::literals; // to bring in the `_a` literal
 
+inline bool has_python_user_data(const py::object & obj) {
+    return obj.ptr() != nullptr && obj.ptr() != Py_None;
+}
+
 
 py::object py_log_callback;
 
@@ -407,7 +411,7 @@ struct WhisperFullParamsWrapper : public whisper_full_params {
             if (self && self->print_progress) {
                 if (self->py_progress_callback) {
                     py::gil_scoped_acquire gil;
-                    if (self->py_progress_callback_user_data.is_none()) {
+                    if (!has_python_user_data(self->py_progress_callback_user_data)) {
                         self->py_progress_callback(progress);
                     } else {
                         self->py_progress_callback(progress, self->py_progress_callback_user_data);
@@ -563,7 +567,7 @@ public:
         progress_callback_user_data = this;
     }
     void set_progress_callback(py::function callback) {
-        py_progress_callback = callback;
+        py_progress_callback = std::move(callback);
         reset_progress_callback();
     }
     void clear_progress_callback() {
@@ -670,12 +674,11 @@ void _new_segment_callback(struct whisper_context * ctx, struct whisper_state * 
 
     py::gil_scoped_acquire gil;
     py::function callback = params->py_new_segment_callback;
-    callback(
-        ctx_w,
-        n_new,
-        params->py_new_segment_callback_user_data.is_none()
-            ? py::none()
-            : params->py_new_segment_callback_user_data);
+    if (!has_python_user_data(params->py_new_segment_callback_user_data)) {
+        callback(ctx_w, n_new);
+    } else {
+        callback(ctx_w, n_new, params->py_new_segment_callback_user_data);
+    }
 };
 
 void assign_new_segment_callback(struct whisper_full_params *params_base, py::object callback){
@@ -704,11 +707,12 @@ bool _encoder_begin_callback(struct whisper_context * ctx, struct whisper_state 
 
     py::gil_scoped_acquire gil;
     py::function callback = params->py_encoder_begin_callback;
-    py::object result_py = callback(
-        ctx_w,
-        params->py_encoder_begin_callback_user_data.is_none()
-            ? py::none()
-            : params->py_encoder_begin_callback_user_data);
+    py::object result_py;
+    if (!has_python_user_data(params->py_encoder_begin_callback_user_data)) {
+        result_py = callback(ctx_w);
+    } else {
+        result_py = callback(ctx_w, params->py_encoder_begin_callback_user_data);
+    }
     bool res = result_py.cast<bool>();
     return res;
 }
@@ -746,13 +750,11 @@ void _logits_filter_callback(
 
     py::gil_scoped_acquire gil;
     py::function callback = params->py_logits_filter_callback;
-    callback(
-        ctx_w,
-        n_tokens,
-        logits,
-        params->py_logits_filter_callback_user_data.is_none()
-            ? py::none()
-            : params->py_logits_filter_callback_user_data);
+    if (!has_python_user_data(params->py_logits_filter_callback_user_data)) {
+        callback(ctx_w, n_tokens, logits);
+    } else {
+        callback(ctx_w, n_tokens, logits, params->py_logits_filter_callback_user_data);
+    }
 }
 
 void assign_logits_filter_callback(struct whisper_full_params *params_base, py::object callback){
@@ -793,9 +795,12 @@ bool _abort_callback(void * user_data) {
 
     py::gil_scoped_acquire gil;
     py::function callback = params->py_abort_callback;
-    py::object result_py = params->py_abort_callback_user_data.is_none()
-        ? callback()
-        : callback(params->py_abort_callback_user_data);
+    py::object result_py;
+    if (!has_python_user_data(params->py_abort_callback_user_data)) {
+        result_py = callback();
+    } else {
+        result_py = callback(params->py_abort_callback_user_data);
+    }
     return result_py.cast<bool>();
 }
 
