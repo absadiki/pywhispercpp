@@ -33,9 +33,6 @@ namespace py = pybind11;
 using namespace pybind11::literals; // to bring in the `_a` literal
 
 
-py::function py_new_segment_callback;
-py::function py_encoder_begin_callback;
-py::function py_logits_filter_callback;
 py::object py_log_callback;
 
 
@@ -440,7 +437,7 @@ public:
     py::object py_progress_callback_user_data;
         py::function py_logits_filter_callback;
         py::object py_logits_filter_callback_user_data;
-    py::object py_abort_callback;
+    py::function py_abort_callback;
     py::object py_abort_callback_user_data;
   WhisperFullParamsWrapper(const whisper_full_params& params = whisper_full_params())
     : whisper_full_params(params),
@@ -452,7 +449,7 @@ public:
                         py_encoder_begin_callback_user_data(py::none()),
             py_progress_callback_user_data(py::none()),
                         py_logits_filter_callback_user_data(py::none()),
-            py_abort_callback(py::none()),
+            py_abort_callback(),
             py_abort_callback_user_data(py::none())
     {
     initial_prompt = initial_prompt_str.empty() ? nullptr : initial_prompt_str.c_str();
@@ -598,12 +595,12 @@ public:
         abort_callback_user_data = this;
     }
     void set_abort_callback(py::function callback) {
-        py_abort_callback = callback;
+        py_abort_callback = std::move(callback);
         abort_callback_user_data = this;
         abort_callback = _abort_callback;
     }
     void clear_abort_callback() {
-        py_abort_callback = py::none();
+        py_abort_callback = py::function();
         abort_callback = nullptr;
         abort_callback_user_data = this;
     }
@@ -790,12 +787,12 @@ void clear_progress_callback(whisper_full_params *params_base) {
 
 bool _abort_callback(void * user_data) {
     auto * params = static_cast<WhisperFullParamsWrapper *>(user_data);
-    if (!params || !params->py_abort_callback || params->py_abort_callback.is_none()) {
+    if (!params || !params->py_abort_callback) {
         return false;
     }
 
     py::gil_scoped_acquire gil;
-    py::function callback = params->py_abort_callback.cast<py::function>();
+    py::function callback = params->py_abort_callback;
     py::object result_py = params->py_abort_callback_user_data.is_none()
         ? callback()
         : callback(params->py_abort_callback_user_data);
@@ -805,22 +802,16 @@ bool _abort_callback(void * user_data) {
 void assign_abort_callback(whisper_full_params *params_base, py::object callback){
     auto * params = static_cast<WhisperFullParamsWrapper *>(params_base);
     if (callback.is_none()) {
-        params->py_abort_callback = py::none();
-        params->abort_callback = nullptr;
-        params->abort_callback_user_data = params;
+        params->clear_abort_callback();
         return;
     }
 
-    params->py_abort_callback = callback.cast<py::function>();
-    params->abort_callback_user_data = params;
-    params->abort_callback = _abort_callback;
+    params->set_abort_callback(callback.cast<py::function>());
 }
 
 void clear_abort_callback(whisper_full_params *params_base) {
     auto * params = static_cast<WhisperFullParamsWrapper *>(params_base);
-    params->py_abort_callback = py::none();
-    params->abort_callback = nullptr;
-    params->abort_callback_user_data = params;
+    params->clear_abort_callback();
 }
 
 void whisper_log_set_wrapper(py::object callback) {
