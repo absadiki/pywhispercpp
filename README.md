@@ -1,4 +1,5 @@
 # pywhispercpp
+
 Python bindings for [whisper.cpp](https://github.com/ggerganov/whisper.cpp) with a simple Pythonic API on top of it.
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://opensource.org/licenses/MIT)
@@ -7,38 +8,49 @@ Python bindings for [whisper.cpp](https://github.com/ggerganov/whisper.cpp) with
 [![Downloads](https://static.pepy.tech/badge/pywhispercpp)](https://pepy.tech/project/pywhispercpp)
 
 # Table of contents
+
 <!-- TOC -->
-* [Installation](#installation)
-    * [From source](#from-source)
-    * [Pre-built wheels](#pre-built-wheels)
-    * [NVIDIA GPU support](#nvidia-gpu-support)
-    * [CoreML support](#coreml-support)
-    * [Vulkan support](#vulkan-support)
-* [Quick start](#quick-start)
-* [Examples](#examples)
-  * [CLI](#cli)
-  * [GUI](#gui)
-  * [Assistant](#assistant)
-* [Advanced usage](#advanced-usage)
-* [Discussions and contributions](#discussions-and-contributions)
-* [License](#license)
+
+- [pywhispercpp](#pywhispercpp)
+- [Table of contents](#table-of-contents)
+- [Installation](#installation)
+    - [From source](#from-source)
+    - [Pre-built wheels](#pre-built-wheels)
+    - [NVIDIA GPU support](#nvidia-gpu-support)
+    - [CoreML support](#coreml-support)
+    - [Vulkan support](#vulkan-support)
+    - [OpenBLAS support](#openblas-support)
+    - [OpenVINO support](#openvino-support)
+- [Quick start](#quick-start)
+- [Examples](#examples)
+  - [CLI](#cli)
+  - [GUI](#gui)
+  - [Assistant](#assistant)
+- [Advanced usage](#advanced-usage)
+- [Discussions and contributions](#discussions-and-contributions)
+- [License](#license)
 <!-- TOC -->
 
 # Installation
 
 ### From source
-* For the best performance, you need to install the package from source:
+
+- For the best performance, you need to install the package from source:
+
 ```shell
 pip install git+https://github.com/absadiki/pywhispercpp
 ```
+
 ### Pre-built wheels
-* Otherwise, Basic Pre-built CPU wheels are available on PYPI
+
+- Otherwise, Basic Pre-built CPU wheels are available on PYPI
 
 ```shell
 pip install pywhispercpp # or pywhispercpp[examples] to install the extra dependencies needed for the examples
 ```
 
-[Optional] To transcribe files other than wav, you need to install ffmpeg:  
+[Optional] To transcribe files other than wav, you need to install ffmpeg:
+
 ```shell
 # on Ubuntu or Debian
 sudo apt update && sudo apt install ffmpeg
@@ -57,11 +69,13 @@ scoop install ffmpeg
 ```
 
 ### NVIDIA GPU support
+
 To Install the package with CUDA support, make sure you have [cuda](https://developer.nvidia.com/cuda-downloads) installed and use `GGML_CUDA=1`:
 
 ```shell
 GGML_CUDA=1 pip install git+https://github.com/absadiki/pywhispercpp
 ```
+
 ### CoreML support
 
 Install the package with `WHISPER_COREML=1`:
@@ -81,6 +95,7 @@ GGML_VULKAN=1 pip install git+https://github.com/absadiki/pywhispercpp
 ### OpenBLAS support
 
 If OpenBLAS is installed, you can use `GGML_BLAS=1`. The other flags ensure you're installing fresh with the correct flags, and printing output for sanity checking.
+
 ```shell
 GGML_BLAS=1 pip install git+https://github.com/absadiki/pywhispercpp --no-cache --force-reinstall -v
 ```
@@ -90,16 +105,15 @@ GGML_BLAS=1 pip install git+https://github.com/absadiki/pywhispercpp --no-cache 
 Follow the the steps to download correct OpenVINO package (https://github.com/ggerganov/whisper.cpp?tab=readme-ov-file#openvino-support).
 
 Then init the OpenVINO environment and build.
+
 ```
-source ~/l_openvino_toolkit_ubuntu22_2023.0.0.10926.b4452d56304_x86_64/setupvars.sh 
+source ~/l_openvino_toolkit_ubuntu22_2023.0.0.10926.b4452d56304_x86_64/setupvars.sh
 WHISPER_OPENVINO=1 pip install git+https://github.com/absadiki/pywhispercpp --no-cache --force-reinstall
 ```
 
 Note that the toolkit for Ubuntu22 works on Ubuntu24
 
-
-** __Feel free to update this list and submit a PR if you tested the package on other backends.__
-
+\*\* **Feel free to update this list and submit a PR if you tested the package on other backends.**
 
 # Quick start
 
@@ -121,21 +135,22 @@ model = Model('base.en', print_realtime=False, print_progress=False)
 segments = model.transcribe('file.mp3', new_segment_callback=print)
 ```
 
-
-* The model will be downloaded automatically, or you can use the path to a local model.
-* You can pass any `whisper.cpp` [parameter](https://absadiki.github.io/pywhispercpp/#pywhispercpp.constants.PARAMS_SCHEMA) as a keyword argument to the `Model` class or to the `transcribe` function.
-* Check the [Model](https://absadiki.github.io/pywhispercpp/#pywhispercpp.model.Model) class documentation for more details.
+- The model will be downloaded automatically, or you can use the path to a local model.
+- You can pass any `whisper.cpp` [parameter](https://absadiki.github.io/pywhispercpp/#pywhispercpp.constants.PARAMS_SCHEMA) as a keyword argument to the `Model` class or to the `transcribe` function.
+- Check the [Model](https://absadiki.github.io/pywhispercpp/#pywhispercpp.model.Model) class documentation for more details.
 
 # Examples
 
 ## CLI
-Just a straightforward example Command Line Interface. 
+
+Just a straightforward example Command Line Interface.
 You can use it as follows:
 
 ```shell
 pwcpp file.wav -m base --output-srt --print_realtime true
 ```
-Run ```pwcpp --help``` to get the help message
+
+Run `pwcpp --help` to get the help message
 
 ```shell
 usage: pwcpp [-h] [-m MODEL] [--version] [--processors PROCESSORS] [-otxt] [-ovtt] [-osrt] [-ocsv] [--strategy STRATEGY]
@@ -229,13 +244,17 @@ options:
 ```
 
 ## GUI
-If you prefer a Graphical User Interface, you can use the `pwcpp-gui` command which will launch A simple graphical interface built with PyQt5. 
-* First you need to install the GUI dependencies:
+
+If you prefer a Graphical User Interface, you can use the `pwcpp-gui` command which will launch A simple graphical interface built with PyQt5.
+
+- First you need to install the GUI dependencies:
+
 ```bash
 pip install pywhispercpp[gui]
 ```
 
-* Then you can run the GUI with:
+- Then you can run the GUI with:
+
 ```bash
 pwcpp-gui
 ```
@@ -248,13 +267,13 @@ The GUI provides a user-friendly way to:
 - View and export transcription results
 
 ## Assistant
-This is a simple example showcasing the use of `pywhispercpp` to create an assistant like example. 
-The idea is to use a Voice Activity Detector (VAD) to detect speech (in this example, we used webrtcvad), and when some speech is detected, we run the transcription. 
+
+This is a simple example showcasing the use of `pywhispercpp` to create an assistant like example.
+The idea is to use a Voice Activity Detector (VAD) to detect speech (in this example, we used webrtcvad), and when some speech is detected, we run the transcription.
 It is inspired from the [whisper.cpp/examples/command](https://github.com/ggerganov/whisper.cpp/tree/master/examples/command) example.
 
-You can check the source code [here](https://github.com/absadiki/pywhispercpp/blob/main/pywhispercpp/examples/assistant.py) 
+You can check the source code [here](https://github.com/absadiki/pywhispercpp/blob/main/pywhispercpp/examples/assistant.py)
 or you can use the class directly to create your own assistant:
-
 
 ```python
 from pywhispercpp.examples.assistant import Assistant
@@ -262,9 +281,11 @@ from pywhispercpp.examples.assistant import Assistant
 my_assistant = Assistant(commands_callback=print, n_threads=8)
 my_assistant.start()
 ```
+
 Here, we set the `commands_callback` to a simple print function, so the commands will just get printed on the screen.
 
 You can also run this example from the command line.
+
 ```shell
 $ pwcpp-assistant --help
 
@@ -281,25 +302,31 @@ options:
   -bd BLOCK_DURATION, --block_duration BLOCK_DURATION
                         minimum time audio updates in ms, default to 30
 ```
--------------
 
-* Check the [examples folder](https://github.com/absadiki/pywhispercpp/tree/main/pywhispercpp/examples) for more examples.
+---
+
+- Check the [examples folder](https://github.com/absadiki/pywhispercpp/tree/main/pywhispercpp/examples) for more examples.
 
 # Advanced usage
-* First check the [API documentation](https://absadiki.github.io/pywhispercpp/) for more advanced usage.
-* If you are a more experienced user, you can access the exposed C-APIs directly from the binding module `_pywhispercpp`.
+
+- First check the [API documentation](https://absadiki.github.io/pywhispercpp/) for more advanced usage.
+- If you are a more experienced user, you can access the exposed C-APIs directly from the binding module `_pywhispercpp`.
 
 ```python
 import _pywhispercpp as pwcpp
 
-ctx = pwcpp.whisper_init_from_file('path/to/ggml/model')
+ctx = pwcpp.whisper_init_from_file_with_params(
+  'path/to/ggml/model',
+  pwcpp.whisper_context_default_params(),
+)
 ```
 
 # Discussions and contributions
+
 If you find any bug, please open an [issue](https://github.com/absadiki/pywhispercpp/issues).
 
 If you have any feedback, or you want to share how you are using this project, feel free to use the [Discussions](https://github.com/absadiki/pywhispercpp/discussions) and open a new topic.
 
 # License
 
-This project is licensed under the same license as [whisper.cpp](https://github.com/ggerganov/whisper.cpp/blob/master/LICENSE) (MIT  [License](./LICENSE)).
+This project is licensed under the same license as [whisper.cpp](https://github.com/ggerganov/whisper.cpp/blob/master/LICENSE) (MIT [License](./LICENSE)).

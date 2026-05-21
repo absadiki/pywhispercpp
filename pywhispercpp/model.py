@@ -334,8 +334,10 @@ class Model:
 
     @staticmethod
     def _resolve_context_params(context_params: Optional[ContextParams]):
+        resolved = pw.whisper_context_default_params()
+
         if context_params is None:
-            return None
+            return resolved
 
         if not isinstance(context_params, dict):
             raise TypeError("context_params must be a ContextParams dict or None")
@@ -346,7 +348,6 @@ class Model:
                 f"Unknown context_params keys: {', '.join(unknown_keys)}"
             )
 
-        resolved = pw.whisper_context_default_params()
         for key, value in context_params.items():
             setattr(resolved, key, value)
         return resolved
@@ -381,10 +382,7 @@ class Model:
         """
         logger.info("Initializing the model ...")
         with utils.redirect_stderr(to=self.redirect_whispercpp_logs_to):
-            if self._context_params is None:
-                self._ctx = pw.whisper_init_from_file(self.model_path)
-            else:
-                self._ctx = pw.whisper_init_from_file_with_params(self.model_path, self._context_params)
+            self._ctx = pw.whisper_init_from_file_with_params(self.model_path, self._context_params)
             if self.use_openvino:
                 pw.whisper_ctx_init_openvino_encoder(self._ctx, self.openvino_model_path, self.openvino_device, self.openvino_cache_dir)
 

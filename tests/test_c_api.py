@@ -11,7 +11,10 @@ class TestCAPI(TestCase):
     model_file = './whisper.cpp/models/for-tests-ggml-tiny.en.bin'
 
     def test_whisper_init_from_file(self):
-        ctx = pw.whisper_init_from_file(self.model_file)
+        ctx = pw.whisper_init_from_file_with_params(
+            self.model_file,
+            pw.whisper_context_default_params(),
+        )
         self.assertIsInstance(ctx, pw.whisper_context)
 
     def test_whisper_lang_str(self):

@@ -86,30 +86,6 @@ struct whisper_context_wrapper whisper_init_with_params_wrapper(
     return ctw_w;
 };
 
-struct whisper_context_wrapper whisper_init_from_file_wrapper(const char * path_model){
-    struct whisper_context_params cparams = whisper_context_default_params();
-    struct whisper_context * ctx = whisper_init_from_file_with_params(path_model, cparams);
-    struct whisper_context_wrapper ctw_w;
-    ctw_w.ptr = ctx;
-    return ctw_w;
-}
-
-struct whisper_context_wrapper whisper_init_from_buffer_wrapper(void * buffer, size_t buffer_size){
-    struct whisper_context_params cparams = whisper_context_default_params();
-    struct whisper_context * ctx = whisper_init_from_buffer_with_params(buffer, buffer_size, cparams);
-    struct whisper_context_wrapper ctw_w;
-    ctw_w.ptr = ctx;
-    return ctw_w;
-}
-
-struct whisper_context_wrapper whisper_init_wrapper(struct whisper_model_loader_wrapper * loader){
-    struct whisper_context_params cparams = whisper_context_default_params();
-    struct whisper_context * ctx = whisper_init_with_params(loader->ptr, cparams);
-    struct whisper_context_wrapper ctw_w;
-    ctw_w.ptr = ctx;
-    return ctw_w;
-};
-
 void whisper_free_wrapper(struct whisper_context_wrapper * ctx_w){
     whisper_free(ctx_w->ptr);
 };
@@ -939,22 +915,12 @@ PYBIND11_MODULE(_pywhispercpp, m) {
 
         m.def("whisper_context_default_params", &whisper_context_default_params,
             "Return the default context parameters used during model initialization.");
-
-    DEF_RELEASE_GIL("whisper_init_from_file", &whisper_init_from_file_wrapper, "Various functions for loading a ggml whisper model.\n"
-                                                                    "Allocate (almost) all memory needed for the model.\n"
-                                                                    "Return NULL on failure");
         DEF_RELEASE_GIL("whisper_init_from_file_with_params", &whisper_init_from_file_with_params_wrapper, "Various functions for loading a ggml whisper model.\n"
                                                   "Allocate (almost) all memory needed for the model.\n"
                                                   "Return NULL on failure");
-    DEF_RELEASE_GIL("whisper_init_from_buffer", &whisper_init_from_buffer_wrapper, "Various functions for loading a ggml whisper model.\n"
-                                                                        "Allocate (almost) all memory needed for the model.\n"
-                                                                        "Return NULL on failure");
         DEF_RELEASE_GIL("whisper_init_from_buffer_with_params", &whisper_init_from_buffer_with_params_wrapper, "Various functions for loading a ggml whisper model.\n"
                                                     "Allocate (almost) all memory needed for the model.\n"
                                                     "Return NULL on failure");
-    DEF_RELEASE_GIL("whisper_init", &whisper_init_wrapper, "Various functions for loading a ggml whisper model.\n"
-                                                "Allocate (almost) all memory needed for the model.\n"
-                                                "Return NULL on failure");
         DEF_RELEASE_GIL("whisper_init_with_params", &whisper_init_with_params_wrapper, "Various functions for loading a ggml whisper model.\n"
                                     "Allocate (almost) all memory needed for the model.\n"
                                     "Return NULL on failure");
