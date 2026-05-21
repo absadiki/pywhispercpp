@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-from typing import Any, Callable, Dict, List, Optional, TextIO, Tuple, TypedDict, Union
+from typing import Any, Callable, Dict, List, Optional, TextIO, Tuple, TypedDict, TypeAlias, Union
 
 import numpy as np
 import numpy.typing as npt
 
-AudioArray = npt.NDArray[np.float32]
-AudioInput = Union[str, AudioArray]
-
+AudioArray: TypeAlias = npt.NDArray[np.float32]
+AudioInput: TypeAlias = Union[str, AudioArray]
 
 class ContextParams(TypedDict, total=False):
     use_gpu: bool
@@ -40,6 +39,7 @@ class Segment:
 
 
 class Model:
+    model_path: str
     _new_segment_callback: Optional[Callable[[Segment], None]]
 
     def __init__(
@@ -52,6 +52,7 @@ class Model:
         openvino_model_path: Optional[str] = None,
         openvino_device: str = 'CPU',
         openvino_cache_dir: Optional[str] = None,
+        context_params: Optional[ContextParams] = None,
         *,
         n_threads: Optional[int] = None,
         n_max_text_ctx: int = 16384,

@@ -111,7 +111,8 @@ class Model:
                                `flash_attn`, `gpu_device`, `dtw_token_timestamps`,
                                `dtw_aheads_preset`, `dtw_n_top`, and `dtw_mem_size`. Omitted keys inherit
                                from `whisper_context_default_params()`.
-        :param params: decode parameters forwarded to `whisper_full_params`.
+        :param params: keyword-only decode parameters matching the public API documented in `model.pyi`.
+            These values are forwarded to `whisper_full_params` and remain active for future calls.
             Supported keys:
             - `n_threads`: number of inference threads. Default is `min(4, hardware_concurrency())`.
             - `n_max_text_ctx`: max prompt-text tokens carried into the decoder. Default `16384`.
@@ -152,7 +153,7 @@ class Model:
             - `logprob_thold`: logprob threshold. Default `-1.0`.
             - `no_speech_thold`: no-speech threshold. Default `0.6`.
             - `greedy`: greedy-decoder settings, typically `{"best_of": 5}`.
-            - `beam_search`: beam-search settings, schema default `{"beam_size": -1, "patience": -1.0}`.
+            - `beam_search`: beam-search settings. Default `{"beam_size": -1, "patience": -1.0}`.
             - `vad`: enable VAD. Default `False`.
             - `vad_model_path`: path to the VAD model. Default `None`.
         """
@@ -189,11 +190,12 @@ class Model:
         :param n_processors: number of worker processes for `whisper_full_parallel`. If omitted, runs a
                      single-process `whisper_full()` decode.
         :param new_segment_callback: callback invoked for each newly produced `Segment` during decoding.
-        :param abort_callback: callback function returning True to abort an in-flight transcription early
-        :param params: keyword arguments for different whisper.cpp parameters; these override the model's
-                       active decode params for this call
+        :param abort_callback: callback function returning True to abort an in-flight transcription early.
         :param extract_probability: If True, calculates the geometric mean of token probabilities for each segment,
             providing a confidence score interpretable as a probability in [0, 1].
+        :param params: additional keyword-only decode parameters matching the public API documented in
+            `model.pyi`, with the same supported keys and defaults as `Model.__init__`.
+            Any overrides applied here remain active for future calls.
         :return: List of transcription segments
         """
         if isinstance(media, np.ndarray):
