@@ -302,12 +302,6 @@ PARAMS_SCHEMA = {  # as exactly presented in whisper.cpp
             'options': None,
             'default': {"beam_size": -1, "patience": -1.0}
     },
-    'extract_probability': {
-            'type': bool,
-            'description': 'calculate the geometric mean of token probabilities for each segment.',
-            'options': None,
-            'default': False
-    },
     'vad': {
         'type': bool,
         'description': 'Enable VAD',
