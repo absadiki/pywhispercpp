@@ -6,7 +6,6 @@ add_subdirectory(whisper.cpp)
 
 pybind11_add_module(_pywhispercpp
 	src/main.cpp
-	whisper.cpp/examples/grammar-parser.cpp
 )
 
 target_link_libraries (_pywhispercpp PRIVATE whisper)

@@ -284,12 +284,6 @@ PARAMS_SCHEMA = {  # as exactly presented in whisper.cpp
             'options': None,
             'default': 0.6
     },
-    'grammar_penalty': {
-            'type': float,
-            'description': 'scales down logits of non-grammar tokens',
-            'options': None,
-            'default': 100.0
-    },
     'greedy': {
             'type': dict,
             'description': 'greedy',

@@ -15,11 +15,7 @@
 #include <pybind11/functional.h>
 #include <pybind11/numpy.h>
 
-#include <fstream>
-#include <iterator>
-
 #include "whisper.h"
-#include "../whisper.cpp/examples/grammar-parser.h"
 
 
 #define STRINGIFY(x) #x
@@ -398,9 +394,7 @@ struct WhisperFullParamsWrapper : public whisper_full_params {
   std::string initial_prompt_str;
   std::string suppress_regex_str;
   std::string vad_model_path_str;
-        std::vector<whisper_token> prompt_token_storage;
-    grammar_parser::parse_state grammar_state;
-    std::vector<const whisper_grammar_element *> grammar_rule_ptrs;
+    std::vector<whisper_token> prompt_token_storage;
 
     void reset_progress_callback() {
         progress_callback_user_data = this;
@@ -423,11 +417,6 @@ struct WhisperFullParamsWrapper : public whisper_full_params {
         };
     }
 
-    void sync_grammar_fields() {
-        grammar_rule_ptrs = grammar_state.c_rules();
-        grammar_rules = grammar_rule_ptrs.empty() ? nullptr : grammar_rule_ptrs.data();
-        n_grammar_rules = grammar_rule_ptrs.size();
-    }
     void sync_prompt_tokens() {
         prompt_tokens = prompt_token_storage.empty() ? nullptr : prompt_token_storage.data();
         prompt_n_tokens = prompt_token_storage.size();
@@ -474,8 +463,7 @@ public:
       initial_prompt_str(other.initial_prompt_str),
       suppress_regex_str(other.suppress_regex_str),
       vad_model_path_str(other.vad_model_path_str),
-                        prompt_token_storage(other.prompt_token_storage),
-            grammar_state(other.grammar_state),
+            prompt_token_storage(other.prompt_token_storage),
             py_new_segment_callback(other.py_new_segment_callback),
             py_new_segment_callback_user_data(other.py_new_segment_callback_user_data),
             py_encoder_begin_callback(other.py_encoder_begin_callback),
@@ -495,7 +483,6 @@ public:
     abort_callback_user_data = this;
         logits_filter_callback_user_data = this;
         sync_prompt_tokens();
-        sync_grammar_fields();
         reset_progress_callback();
   }
   void set_initial_prompt(const std::string& prompt) {
@@ -607,54 +594,6 @@ public:
         py_abort_callback = py::function();
         abort_callback = nullptr;
         abort_callback_user_data = this;
-    }
-    void set_grammar(const std::string& grammar, const std::string& start_rule, float penalty) {
-        if (grammar.empty()) {
-            clear_grammar();
-            grammar_penalty = penalty;
-            return;
-        }
-
-        std::ifstream grammar_file(grammar);
-        std::string grammar_source;
-        if (grammar_file.good()) {
-            grammar_source.assign(
-                    std::istreambuf_iterator<char>(grammar_file),
-                    std::istreambuf_iterator<char>());
-        } else {
-            grammar_source = grammar;
-        }
-
-        auto parsed = grammar_parser::parse(grammar_source.c_str());
-        auto rule_iter = parsed.symbol_ids.find(start_rule);
-        if (rule_iter == parsed.symbol_ids.end()) {
-            throw std::runtime_error("unknown grammar start rule: " + start_rule);
-        }
-
-        grammar_state = std::move(parsed);
-        sync_grammar_fields();
-        i_start_rule = rule_iter->second;
-        grammar_penalty = penalty;
-    }
-    void clear_grammar() {
-        grammar_state = grammar_parser::parse_state();
-        grammar_rule_ptrs.clear();
-        grammar_rules = nullptr;
-        n_grammar_rules = 0;
-        i_start_rule = 0;
-    }
-    py::list get_grammar_rules() const {
-        py::list rules;
-        for (const auto& rule : grammar_state.rules) {
-            py::list elements;
-            for (const auto& element : rule) {
-                elements.append(py::dict(
-                        "type"_a = static_cast<int>(element.type),
-                        "value"_a = element.value));
-            }
-            rules.append(elements);
-        }
-        return rules;
     }
 };
 WhisperFullParamsWrapper  whisper_full_default_params_wrapper(enum whisper_sampling_strategy strategy) {
@@ -1154,11 +1093,7 @@ PYBIND11_MODULE(_pywhispercpp, m) {
                 << "progress_callback=" << (self.progress_callback ? "(function pointer)" : "None") << ", "
                 << "encoder_begin_callback=" << (self.encoder_begin_callback ? "(function pointer)" : "None") << ", "
                 << "abort_callback=" << (self.abort_callback ? "(function pointer)" : "None") << ", "
-                << "logits_filter_callback=" << (self.logits_filter_callback ? "(function pointer)" : "None") << ", "
-                << "grammar_rules=" << (self.grammar_rules ? "(whisper_grammar_element **)" : "None") << ", "
-                << "n_grammar_rules=" << self.n_grammar_rules << ", "
-                << "i_start_rule=" << self.i_start_rule << ", "
-                << "grammar_penalty=" << self.grammar_penalty
+                << "logits_filter_callback=" << (self.logits_filter_callback ? "(function pointer)" : "None")
                 << ")";
             return oss.str();
         });
@@ -1311,12 +1246,6 @@ PYBIND11_MODULE(_pywhispercpp, m) {
         .def_property("logits_filter_callback_user_data",
             &WhisperFullParamsWrapper::get_logits_filter_callback_user_data,
             &WhisperFullParamsWrapper::set_logits_filter_callback_user_data)
-        .def_property_readonly("grammar_rules", &WhisperFullParamsWrapper::get_grammar_rules)
-        .def_property_readonly("n_grammar_rules", [](const WhisperFullParamsWrapper &self) { return self.n_grammar_rules; })
-        .def_property_readonly("i_start_rule", [](const WhisperFullParamsWrapper &self) { return self.i_start_rule; })
-        .def("set_grammar", &WhisperFullParamsWrapper::set_grammar,
-            py::arg("grammar"), py::arg("start_rule") = "root", py::arg("penalty") = 100.0f,
-            "Parse grammar text or a grammar file path and assign it to the params.")
         .def("set_logits_filter_callback",
              [](WhisperFullParamsWrapper &self, py::object callback) {
                  if (callback.is_none()) {
@@ -1329,9 +1258,6 @@ PYBIND11_MODULE(_pywhispercpp, m) {
              "Assign a logits-filter callback.")
         .def("clear_logits_filter_callback", &WhisperFullParamsWrapper::clear_logits_filter_callback,
              "Clear any previously assigned logits-filter callback.")
-        .def("clear_grammar", &WhisperFullParamsWrapper::clear_grammar,
-            "Clear any previously assigned grammar.")
-        .def_readwrite("grammar_penalty", &WhisperFullParamsWrapper::grammar_penalty)
         .def_readwrite("vad", &WhisperFullParamsWrapper::vad)
         .def_property("vad_model_path",
         [](WhisperFullParamsWrapper &self) {

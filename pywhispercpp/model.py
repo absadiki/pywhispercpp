@@ -6,20 +6,21 @@ This module contains a simple Python API on-top of the C-style
 [whisper.cpp](https://github.com/ggerganov/whisper.cpp) API.
 """
 import importlib.metadata
+import subprocess
+import os
 import logging
 import shutil
 import sys
+import tempfile
+import wave
 from pathlib import Path
 from time import time
 from typing import Any, Union, Callable, List, TextIO, Tuple, Optional, Dict, TypedDict
+
 import _pywhispercpp as pw
 import numpy as np
-import pywhispercpp.utils as utils
 import pywhispercpp.constants as constants
-import subprocess
-import os
-import tempfile
-import wave
+import pywhispercpp.utils as utils
 
 __author__ = "absadiki"
 __copyright__ = "Copyright 2023, "
@@ -134,8 +135,6 @@ class Model:
             - `audio_ctx`: override audio context size. Default `0`.
             - `tdrz_enable`: enable tinydiarize speaker-turn detection. Default `False`.
             - `initial_prompt`: initial text prompt prepended before decoding. Default `None`.
-            - `grammar`: GBNF grammar text or path to a grammar file. Default `None`.
-            - `grammar_rule`: top-level grammar rule name. Default `root` when grammar is used.
             - `prompt_tokens`: explicit prompt token sequence. Default `None`.
             - `prompt_n_tokens`: number of prompt tokens. Default `0`.
             - `carry_initial_prompt`: prepend the initial prompt to each decode window. Default `False`.
@@ -152,7 +151,6 @@ class Model:
             - `entropy_thold`: entropy threshold. Default `2.4`.
             - `logprob_thold`: logprob threshold. Default `-1.0`.
             - `no_speech_thold`: no-speech threshold. Default `0.6`.
-            - `grammar_penalty`: penalty applied to non-grammar tokens. Default `100.0`.
             - `greedy`: greedy-decoder settings, typically `{"best_of": 5}`.
             - `beam_search`: beam-search settings, schema default `{"beam_size": -1, "patience": -1.0}`.
             - `vad`: enable VAD. Default `False`.
@@ -360,29 +358,6 @@ class Model:
 
         return normalized
 
-    def _apply_grammar_params(self, normalized: dict) -> dict:
-        has_grammar = 'grammar' in normalized
-        has_grammar_rule = 'grammar_rule' in normalized
-
-        if not has_grammar:
-            if has_grammar_rule:
-                raise AttributeError('grammar_rule requires grammar')
-            return normalized
-
-        grammar = normalized.pop('grammar')
-        grammar_rule = normalized.pop('grammar_rule', 'root')
-
-        if grammar is None:
-            self._params.clear_grammar()
-            return normalized
-
-        self._params.set_grammar(
-            grammar,
-            grammar_rule,
-            normalized.get('grammar_penalty', self._params.grammar_penalty),
-        )
-        return normalized
-
     def _apply_prompt_token_params(self, normalized: dict) -> dict:
         if 'prompt_tokens' not in normalized:
             return normalized
@@ -420,9 +395,6 @@ class Model:
         :return: None
         """
         normalized = self._normalize_params(kwargs)
-
-        if 'grammar' in normalized or 'grammar_rule' in normalized:
-            normalized = self._apply_grammar_params(normalized)
 
         if 'prompt_tokens' in normalized:
             normalized = self._apply_prompt_token_params(normalized)
