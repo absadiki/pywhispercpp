@@ -139,7 +139,7 @@ class Model:
             - `prompt_tokens`: explicit prompt token sequence. Default `None`.
             - `prompt_n_tokens`: number of prompt tokens. Default `0`.
             - `carry_initial_prompt`: prepend the initial prompt to each decode window. Default `False`.
-            - `language`: language code. Default `en`.
+            - `language`: language code. Default ``.
             - `detect_language`: enable automatic language detection during transcription. Default `False`.
             - `suppress_blank`: suppress blank outputs. Default `True`.
             - `suppress_non_speech_tokens`: Python alias for `suppress_nst`. Default `False`.
