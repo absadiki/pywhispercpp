@@ -292,7 +292,10 @@ options:
 ```python
 import _pywhispercpp as pwcpp
 
-ctx = pwcpp.whisper_init_from_file('path/to/ggml/model')
+ctx = pwcpp.whisper_init_from_file_with_params(
+  'path/to/ggml/model',
+  pwcpp.whisper_context_default_params(),
+)
 ```
 
 # Discussions and contributions

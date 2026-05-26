@@ -6,20 +6,21 @@ This module contains a simple Python API on-top of the C-style
 [whisper.cpp](https://github.com/ggerganov/whisper.cpp) API.
 """
 import importlib.metadata
+import subprocess
+import os
 import logging
 import shutil
 import sys
-from pathlib import Path
-from time import time
-from typing import Union, Callable, List, TextIO, Tuple, Optional
-import _pywhispercpp as pw
-import numpy as np
-import pywhispercpp.utils as utils
-import pywhispercpp.constants as constants
-import subprocess
-import os
 import tempfile
 import wave
+from pathlib import Path
+from time import time
+from typing import Any, Union, Callable, List, TextIO, Tuple, Optional, Dict, TypedDict
+
+import _pywhispercpp as pw
+import numpy as np
+import pywhispercpp.constants as constants
+import pywhispercpp.utils as utils
 
 __author__ = "absadiki"
 __copyright__ = "Copyright 2023, "
@@ -27,6 +28,19 @@ __license__ = "MIT"
 __version__ = importlib.metadata.version('pywhispercpp')
 
 logger = logging.getLogger(__name__)
+
+
+class ContextParams(TypedDict, total=False):
+    use_gpu: bool
+    flash_attn: bool
+    gpu_device: int
+    dtw_token_timestamps: bool
+    dtw_aheads_preset: int
+    dtw_n_top: int
+    dtw_mem_size: int
+
+
+_CONTEXT_PARAM_KEYS = frozenset(ContextParams.__annotations__)
 
 
 class Segment:
@@ -68,34 +82,84 @@ class Model:
     ```
     """
 
-    _new_segment_callback = None
+    
 
     def __init__(self,
                  model: str = 'tiny',
-                 models_dir: str = None,
+                 models_dir: Optional[str] = None,
                  params_sampling_strategy: int = 0,
                  redirect_whispercpp_logs_to: Union[bool, TextIO, str, None] = False,
                  use_openvino: bool = False,
-                 openvino_model_path: str = None,
+                 openvino_model_path: Optional[str] = None,
                  openvino_device: str = 'CPU',
-                 openvino_cache_dir: str = None,
+                 openvino_cache_dir: Optional[str] = None,
+                 context_params: Optional[ContextParams] = None,
                  **params):
         """
-        :param model: The name of the model, one of the [AVAILABLE_MODELS](/pywhispercpp/#pywhispercpp.constants.AVAILABLE_MODELS),
-                        (default to `tiny`), or a direct path to a `ggml` model.
-        :param models_dir: The directory where the models are stored, or where they will be downloaded if they don't
-                            exist, default to [MODELS_DIR](/pywhispercpp/#pywhispercpp.constants.MODELS_DIR) <user_data_dir/pywhsipercpp/models>
-        :param params_sampling_strategy: 0 -> GREEDY, else BEAM_SEARCH
-        :param redirect_whispercpp_logs_to: where to redirect the whisper.cpp logs, default to False (no redirection), accepts str file path, sys.stdout, sys.stderr, or use None to redirect to devnull
-        :param use_openvino: whether to use OpenVINO or not
-        :param openvino_model_path: path to the OpenVINO model
-        :param openvino_device: OpenVINO device, default to CPU
-        :param openvino_cache_dir: OpenVINO cache directory
-        :param params: keyword arguments for different whisper.cpp parameters,
-                        see [PARAMS_SCHEMA](/pywhispercpp/#pywhispercpp.constants.PARAMS_SCHEMA)
+        :param model: model name, default `tiny`, or a direct path to a ggml model file.
+        :param models_dir: directory containing model files; if omitted, uses `MODELS_DIR` unless `model`
+                           is already a direct file path.
+        :param params_sampling_strategy: sampling strategy selector; `0` uses greedy decoding and any
+                                         other value uses beam search.
+        :param redirect_whispercpp_logs_to: log redirection target. Use `False` for no redirection, `None`
+                                            for `/dev/null`, a file path string, or `sys.stdout`/`sys.stderr`.
+        :param use_openvino: whether to initialize the OpenVINO encoder backend.
+        :param openvino_model_path: path to the OpenVINO model directory or files.
+        :param openvino_device: OpenVINO device name, default `CPU`.
+        :param openvino_cache_dir: OpenVINO cache directory.
+        :param context_params: optional whisper context loader params. Accepted keys are `use_gpu`,
+                               `flash_attn`, `gpu_device`, `dtw_token_timestamps`,
+                               `dtw_aheads_preset`, `dtw_n_top`, and `dtw_mem_size`. Omitted keys inherit
+                               from `whisper_context_default_params()`.
+        :param params: keyword-only decode parameters matching the public API documented in `model.pyi`.
+            These values are forwarded to `whisper_full_params` and remain active for future calls.
+            Supported keys:
+            - `n_threads`: number of inference threads. Default is `min(4, hardware_concurrency())`.
+            - `n_max_text_ctx`: max prompt-text tokens carried into the decoder. Default `16384`.
+            - `offset_ms`: audio start offset in milliseconds. Default `0`.
+            - `duration_ms`: audio duration to process in milliseconds. Default `0`.
+            - `translate`: translate output to English. Default `False`.
+            - `no_context`: disable reuse of past transcription context. Default `True`.
+            - `no_timestamps`: disable timestamp generation. Default `False`.
+            - `single_segment`: force a single output segment. Default `False`.
+            - `print_special`: print special tokens. Default `False`.
+            - `print_progress`: print progress information. Default `True`.
+            - `print_realtime`: print realtime output from whisper.cpp. Default `False`.
+            - `print_timestamps`: print timestamps during realtime output. Default `True`.
+            - `token_timestamps`: enable token-level timestamps. Default `False`.
+            - `thold_pt`: token timestamp probability threshold. Default `0.01`.
+            - `thold_ptsum`: token timestamp sum threshold. Default `0.01`.
+            - `max_len`: max segment length in characters. Default `0`.
+            - `split_on_word`: split on words when `max_len` is used. Default `False`.
+            - `max_tokens`: max tokens per segment. Default `0`.
+            - `debug_mode`: enable whisper.cpp debug mode. Default `False`.
+            - `audio_ctx`: override audio context size. Default `0`.
+            - `tdrz_enable`: enable tinydiarize speaker-turn detection. Default `False`.
+            - `initial_prompt`: initial text prompt prepended before decoding. Default `None`.
+            - `prompt_tokens`: explicit prompt token sequence. Default `None`.
+            - `prompt_n_tokens`: number of prompt tokens. Default `0`.
+            - `carry_initial_prompt`: prepend the initial prompt to each decode window. Default `False`.
+            - `language`: language code. Default ``.
+            - `detect_language`: enable automatic language detection during transcription. Default `False`.
+            - `suppress_blank`: suppress blank outputs. Default `True`.
+            - `suppress_non_speech_tokens`: Python alias for `suppress_nst`. Default `False`.
+            - `suppress_nst`: suppress non-speech tokens. Default `False`.
+            - `suppress_regex`: regex pattern used to suppress matching text during decoding. Default `''`.
+            - `temperature`: initial decoding temperature. Default `0.0`.
+            - `max_initial_ts`: maximum initial timestamp. Default `1.0`.
+            - `length_penalty`: length penalty. Default `-1.0`.
+            - `temperature_inc`: fallback temperature increment. Default `0.2`.
+            - `entropy_thold`: entropy threshold. Default `2.4`.
+            - `logprob_thold`: logprob threshold. Default `-1.0`.
+            - `no_speech_thold`: no-speech threshold. Default `0.6`.
+            - `greedy`: greedy-decoder settings, typically `{"best_of": 5}`.
+            - `beam_search`: beam-search settings. Default `{"beam_size": -1, "patience": -1.0}`.
+            - `vad`: enable VAD. Default `False`.
+            - `vad_model_path`: path to the VAD model. Default `None`.
         """
         self.model_path = utils.resolve_model_path(model, models_dir)
         self._ctx = None
+        self._context_params = self._resolve_context_params(context_params)
         self._sampling_strategy = pw.whisper_sampling_strategy.WHISPER_SAMPLING_GREEDY if params_sampling_strategy == 0 else \
             pw.whisper_sampling_strategy.WHISPER_SAMPLING_BEAM_SEARCH
         self._params = pw.whisper_full_default_params(self._sampling_strategy)
@@ -107,29 +171,34 @@ class Model:
         self.openvino_model_path = openvino_model_path
         self.openvino_device = openvino_device
         self.openvino_cache_dir = openvino_cache_dir
+        # todo... maybe setup default callbacks for segments and abort globaly and/or per model instance?
+        self._new_segment_callback = None
         # init the model
         self._init_model()
 
     def transcribe(self,
                    media: Union[str, np.ndarray],
-                   n_processors: int = None,
-                   new_segment_callback: Callable[[Segment], None] = None,
+                   n_processors: Optional[int] = None,
+                   new_segment_callback: Optional[Callable[[Segment], None]] = None,
+                   abort_callback: Optional[Callable[[], bool]] = None,
                    **params) -> List[Segment]:
         """
         Transcribes the media provided as input and returns list of `Segment` objects.
         Accepts a media_file path (audio/video) or a raw numpy array.
 
         :param media: Media file path or a numpy array
-        :param n_processors: if not None, it will run the transcription on multiple processes
-                             binding to whisper.cpp/whisper_full_parallel
-                             > Split the input audio in chunks and process each chunk separately using whisper_full()
-        :param new_segment_callback: callback function that will be called when a new segment is generated
-        :param params: keyword arguments for different whisper.cpp parameters, see ::: constants.PARAMS_SCHEMA
+        :param n_processors: number of worker processes for `whisper_full_parallel`. If omitted, runs a
+                     single-process `whisper_full()` decode.
+        :param new_segment_callback: callback invoked for each newly produced `Segment` during decoding.
+        :param abort_callback: callback function returning True to abort an in-flight transcription early.
         :param extract_probability: If True, calculates the geometric mean of token probabilities for each segment,
             providing a confidence score interpretable as a probability in [0, 1].
+        :param params: additional keyword-only decode parameters matching the public API documented in
+            `model.pyi`, with the same supported keys and defaults as `Model.__init__`.
+            Any overrides applied here remain active for future calls.
         :return: List of transcription segments
         """
-        if type(media) is np.ndarray:
+        if isinstance(media, np.ndarray):
             audio = media
         else:
             if not Path(media).exists():
@@ -142,10 +211,15 @@ class Model:
         # update params if any
         self._set_params(params)
 
-        # setting up callback
-        if new_segment_callback:
-            Model._new_segment_callback = new_segment_callback
-            pw.assign_new_segment_callback(self._params, Model.__call_new_segment_callback)
+        # setting up callback. make sure self._new_segment_callback = None when new_segment_callback = None.
+        # since this is no lonmger bound to the Model but on self 
+        self._new_segment_callback = new_segment_callback
+        pw.assign_new_segment_callback(
+            self._params,
+            self.__call_new_segment_callback if new_segment_callback is not None else None,
+        )
+
+        pw.assign_abort_callback(self._params, abort_callback)
 
         # run inference
         start_time = time()
@@ -191,7 +265,7 @@ class Model:
                 else:
                     avg_prob = np.nan
 
-            res.append(Segment(t0, t1, text.strip(), probability=np.float32(avg_prob)))
+            res.append(Segment(t0, t1, text.strip(), probability=float(avg_prob)))
         return res
 
     def get_params(self) -> dict:
@@ -246,7 +320,7 @@ class Model:
         return pw.whisper_print_system_info()
 
     @staticmethod
-    def available_languages() -> list[str]:
+    def available_languages() -> List[str]:
         """
         Returns a list of supported language codes
 
@@ -258,6 +332,49 @@ class Model:
             res.append(pw.whisper_lang_str(i))
         return res
 
+    @staticmethod
+    def _resolve_context_params(context_params: Optional[ContextParams]):
+        resolved = pw.whisper_context_default_params()
+
+        if context_params is None:
+            return resolved
+
+        if not isinstance(context_params, dict):
+            raise TypeError("context_params must be a ContextParams dict or None")
+
+        unknown_keys = sorted(set(context_params) - _CONTEXT_PARAM_KEYS)
+        if unknown_keys:
+            raise TypeError(
+                f"Unknown context_params keys: {', '.join(unknown_keys)}"
+            )
+
+        for key, value in context_params.items():
+            setattr(resolved, key, value)
+        return resolved
+
+    @staticmethod
+    def _normalize_params(kwargs: dict) -> dict:
+        normalized = dict(kwargs)
+
+        if 'suppress_non_speech_tokens' in normalized and 'suppress_nst' not in normalized:
+            normalized['suppress_nst'] = normalized.pop('suppress_non_speech_tokens')
+
+        return normalized
+
+    def _apply_prompt_token_params(self, normalized: dict) -> dict:
+        if 'prompt_tokens' not in normalized:
+            return normalized
+
+        prompt_tokens = normalized.pop('prompt_tokens')
+        normalized.pop('prompt_n_tokens', None)
+
+        if prompt_tokens is None:
+            self._params.clear_prompt_tokens()
+        else:
+            self._params.set_prompt_tokens(prompt_tokens)
+
+        return normalized
+
     def _init_model(self) -> None:
         """
         Private method to initialize the method from the bindings, it will be called automatically from the __init__
@@ -265,7 +382,7 @@ class Model:
         """
         logger.info("Initializing the model ...")
         with utils.redirect_stderr(to=self.redirect_whispercpp_logs_to):
-            self._ctx = pw.whisper_init_from_file(self.model_path)
+            self._ctx = pw.whisper_init_from_file_with_params(self.model_path, self._context_params)
             if self.use_openvino:
                 pw.whisper_ctx_init_openvino_encoder(self._ctx, self.openvino_model_path, self.openvino_device, self.openvino_cache_dir)
 
@@ -277,10 +394,15 @@ class Model:
         :param kwargs: dict like object for the different params
         :return: None
         """
-        for param in kwargs:
-            setattr(self._params, param, kwargs[param])
+        normalized = self._normalize_params(kwargs)
 
-    def _transcribe(self, audio: np.ndarray, n_processors: int = None):
+        if 'prompt_tokens' in normalized:
+            normalized = self._apply_prompt_token_params(normalized)
+
+        for param, value in normalized.items():
+            setattr(self._params, param, value)
+
+    def _transcribe(self, audio: np.ndarray, n_processors: Optional[int] = None):
         """
         Private method to call the whisper.cpp/whisper_full function
 
@@ -297,8 +419,8 @@ class Model:
         res = Model._get_segments(self._ctx, 0, n, self.extract_probability)
         return res
 
-    @staticmethod
-    def __call_new_segment_callback(ctx, n_new, user_data) -> None:
+    
+    def __call_new_segment_callback(self, ctx, n_new, user_data=None) -> None:
         """
         Internal new_segment_callback, it just calls the user's callback with the `Segment` object
         :param ctx: whisper.cpp ctx param
@@ -310,10 +432,11 @@ class Model:
         start = n - n_new
         res = Model._get_segments(ctx, start, n, False)
         for segment in res:
-            Model._new_segment_callback(segment)
+            if self._new_segment_callback is not None:
+                self._new_segment_callback(segment)
 
     @staticmethod
-    def _load_audio(media_file_path: str) -> np.array:
+    def _load_audio(media_file_path: str) -> np.ndarray:
         """
          Helper method to return a `np.array` object from a media file
          If the media file is not a WAV file, it will try to convert it using ffmpeg
@@ -369,21 +492,27 @@ class Model:
             finally:
                 os.remove(temp_file_path)
 
-    def auto_detect_language(self,  media: Union[str, np.ndarray], offset_ms: int = 0, n_threads: int = 4) -> Tuple[Tuple[str, np.float32], dict[str, np.float32]]:
+    def auto_detect_language(self, media: Union[str, np.ndarray], offset_ms: Optional[int] = None, n_threads: Optional[int] = None) -> Tuple[Tuple[str, np.float32], Dict[str, np.float32]]:
         """
         Automatic language detection using whisper.cpp/whisper_pcm_to_mel and whisper.cpp/whisper_lang_auto_detect
 
         :param media: Media file path or a numpy array
-        :param offset_ms: offset in milliseconds
-        :param n_threads: number of threads to use
+        :param offset_ms: offset in milliseconds; when omitted, uses the model's current `offset_ms`
+        :param n_threads: number of threads to use; when omitted, uses the model's current `n_threads`
         :return: ((detected_language, probability), probabilities for all languages)
         """
-        if type(media) is np.ndarray:
+        if isinstance(media, np.ndarray):
             audio = media
         else:
             if not Path(media).exists():
                 raise FileNotFoundError(media)
             audio = self._load_audio(media)
+
+        if offset_ms is None:
+            offset_ms = self._params.offset_ms
+
+        if n_threads is None:
+            n_threads = self._params.n_threads
 
         pw.whisper_pcm_to_mel(self._ctx, audio, len(audio), n_threads)
         lang_count = self.lang_max_id() + 1
@@ -391,11 +520,12 @@ class Model:
         auto_detect = pw.whisper_lang_auto_detect(self._ctx, offset_ms, n_threads, probs)
         langs = self.available_languages()
         lang_probs = {langs[i]: probs[i] for i in range(lang_count)}
-        return (langs[auto_detect], probs[auto_detect]), lang_probs
+        return (langs[auto_detect], np.float32(probs[auto_detect])), lang_probs
 
     def __del__(self):
         """
         Free up resources
         :return: None
         """
-        pw.whisper_free(self._ctx)
+        if self._ctx is not None:
+            pw.whisper_free(self._ctx)

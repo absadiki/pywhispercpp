@@ -1,12 +1,21 @@
 from __future__ import annotations
 
-from typing import Any, Callable, Dict, List, Optional, TextIO, Tuple, TypedDict, Union
+from typing import Any, Callable, Dict, List, Optional, TextIO, Tuple, TypedDict, TypeAlias, Union
 
 import numpy as np
 import numpy.typing as npt
 
-AudioArray = npt.NDArray[np.float32]
-AudioInput = Union[str, AudioArray]
+AudioArray: TypeAlias = npt.NDArray[np.float32]
+AudioInput: TypeAlias = Union[str, AudioArray]
+
+class ContextParams(TypedDict, total=False):
+    use_gpu: bool
+    flash_attn: bool
+    gpu_device: int
+    dtw_token_timestamps: bool
+    dtw_aheads_preset: int
+    dtw_n_top: int
+    dtw_mem_size: int
 
 
 class GreedyParams(TypedDict):
@@ -30,6 +39,7 @@ class Segment:
 
 
 class Model:
+    model_path: str
     _new_segment_callback: Optional[Callable[[Segment], None]]
 
     def __init__(
@@ -42,13 +52,15 @@ class Model:
         openvino_model_path: Optional[str] = None,
         openvino_device: str = 'CPU',
         openvino_cache_dir: Optional[str] = None,
+        context_params: Optional[ContextParams] = None,
         *,
         n_threads: Optional[int] = None,
         n_max_text_ctx: int = 16384,
         offset_ms: int = 0,
         duration_ms: int = 0,
         translate: bool = False,
-        no_context: bool = False,
+        no_context: bool = True,
+        no_timestamps: bool = False,
         single_segment: bool = False,
         print_special: bool = False,
         print_progress: bool = True,
@@ -60,13 +72,19 @@ class Model:
         max_len: int = 0,
         split_on_word: bool = False,
         max_tokens: int = 0,
+        debug_mode: bool = False,
         audio_ctx: int = 0,
+        tdrz_enable: bool = False,
         initial_prompt: Optional[str] = None,
         prompt_tokens: Optional[Tuple[Any, ...]] = None,
         prompt_n_tokens: int = 0,
+        carry_initial_prompt: bool = False,
         language: str = '',
+        detect_language: bool = False,
         suppress_blank: bool = True,
         suppress_non_speech_tokens: bool = False,
+        suppress_nst: bool = False,
+        suppress_regex: str = '',
         temperature: float = 0.0,
         max_initial_ts: float = 1.0,
         length_penalty: float = -1.0,
@@ -74,7 +92,7 @@ class Model:
         entropy_thold: float = 2.4,
         logprob_thold: float = -1.0,
         no_speech_thold: float = 0.6,
-        greedy: GreedyParams = {'best_of': -1},
+        greedy: GreedyParams = {'best_of': 5},
         beam_search: BeamSearchParams = {'beam_size': -1, 'patience': -1.0},
         vad: bool = False,
         vad_model_path: Optional[str] = None,
@@ -86,13 +104,15 @@ class Model:
         media: AudioInput,
         n_processors: Optional[int] = None,
         new_segment_callback: Optional[Callable[[Segment], None]] = None,
+        abort_callback: Optional[Callable[[], bool]] = None,
         *,
         n_threads: Optional[int] = None,
         n_max_text_ctx: int = 16384,
         offset_ms: int = 0,
         duration_ms: int = 0,
         translate: bool = False,
-        no_context: bool = False,
+        no_context: bool = True,
+        no_timestamps: bool = False,
         single_segment: bool = False,
         print_special: bool = False,
         print_progress: bool = True,
@@ -104,13 +124,19 @@ class Model:
         max_len: int = 0,
         split_on_word: bool = False,
         max_tokens: int = 0,
+        debug_mode: bool = False,
         audio_ctx: int = 0,
+        tdrz_enable: bool = False,
         initial_prompt: Optional[str] = None,
         prompt_tokens: Optional[Tuple[Any, ...]] = None,
         prompt_n_tokens: int = 0,
+        carry_initial_prompt: bool = False,
         language: str = '',
+        detect_language: bool = False,
         suppress_blank: bool = True,
         suppress_non_speech_tokens: bool = False,
+        suppress_nst: bool = False,
+        suppress_regex: str = '',
         temperature: float = 0.0,
         max_initial_ts: float = 1.0,
         length_penalty: float = -1.0,
@@ -118,7 +144,7 @@ class Model:
         entropy_thold: float = 2.4,
         logprob_thold: float = -1.0,
         no_speech_thold: float = 0.6,
-        greedy: GreedyParams = {'best_of': -1},
+        greedy: GreedyParams = {'best_of': 5},
         beam_search: BeamSearchParams = {'beam_size': -1, 'patience': -1.0},
         extract_probability: bool = False,
         vad: bool = False,
@@ -141,8 +167,8 @@ class Model:
     def auto_detect_language(
         self,
         media: AudioInput,
-        offset_ms: int = 0,
-        n_threads: int = 4,
+        offset_ms: Optional[int] = None,
+        n_threads: Optional[int] = None,
     ) -> Tuple[Tuple[str, np.float32], Dict[str, np.float32]]: ...
     def __del__(self) -> None: ...
 
