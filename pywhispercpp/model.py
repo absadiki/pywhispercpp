@@ -181,6 +181,7 @@ class Model:
                    n_processors: Optional[int] = None,
                    new_segment_callback: Optional[Callable[[Segment], None]] = None,
                    abort_callback: Optional[Callable[[], bool]] = None,
+                   extract_probability: bool = False,
                    **params) -> List[Segment]:
         """
         Transcribes the media provided as input and returns list of `Segment` objects.
@@ -205,9 +206,6 @@ class Model:
                 raise FileNotFoundError(media)
             audio = self._load_audio(media)
 
-        # Handle extract_probability parameter
-        self.extract_probability = params.pop('extract_probability', False)
-
         # update params if any
         self._set_params(params)
 
@@ -224,7 +222,7 @@ class Model:
         # run inference
         start_time = time()
         logger.info("Transcribing ...")
-        res = self._transcribe(audio, n_processors=n_processors)
+        res = self._transcribe(audio, n_processors=n_processors, extract_probability=extract_probability)
         end_time = time()
         logger.info(f"Inference time: {end_time - start_time:.3f} s")
         return res
@@ -402,12 +400,14 @@ class Model:
         for param, value in normalized.items():
             setattr(self._params, param, value)
 
-    def _transcribe(self, audio: np.ndarray, n_processors: Optional[int] = None):
+    def _transcribe(self, audio: np.ndarray, n_processors: Optional[int] = None, extract_probability: bool = False):
         """
         Private method to call the whisper.cpp/whisper_full function
 
         :param audio: numpy array of audio data
         :param n_processors: if not None, it will run whisper.cpp/whisper_full_parallel with n_processors
+        :param extract_probability: If True, calculates the geometric mean of token probabilities for each segment,
+            providing a confidence score interpretable as a probability in [0, 1].
         :return:
         """
 
@@ -416,7 +416,7 @@ class Model:
         else:
             pw.whisper_full(self._ctx, self._params, audio, audio.size)
         n = pw.whisper_full_n_segments(self._ctx)
-        res = Model._get_segments(self._ctx, 0, n, self.extract_probability)
+        res = Model._get_segments(self._ctx, 0, n, extract_probability)
         return res
 
     
