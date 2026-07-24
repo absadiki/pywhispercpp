@@ -19,7 +19,12 @@ struct parakeet_context_wrapper {
 static py::object parakeet_init_from_file_with_params_wrapper(
         const char * path_model,
         struct parakeet_context_params cparams) {
-    struct parakeet_context * ctx = parakeet_init_from_file_with_params(path_model, cparams);
+    // Release the GIL only for the native load. py::cast / py::none need the GIL.
+    struct parakeet_context * ctx;
+    {
+        py::gil_scoped_release release;
+        ctx = parakeet_init_from_file_with_params(path_model, cparams);
+    }
     if (!ctx) {
         return py::none();
     }
@@ -107,10 +112,10 @@ void init_parakeet_bindings(py::module_ & m) {
     m.def("parakeet_version", &parakeet_version);
     m.def("parakeet_context_default_params", &parakeet_context_default_params);
     m.def("parakeet_full_default_params", &parakeet_full_default_params, py::arg("strategy"));
+    // No call_guard gil_scoped_release: this binding returns py::object via py::cast.
     m.def("parakeet_init_from_file_with_params",
           &parakeet_init_from_file_with_params_wrapper,
-          py::arg("path_model"), py::arg("params"),
-          py::call_guard<py::gil_scoped_release>());
+          py::arg("path_model"), py::arg("params"));
     m.def("parakeet_free", &parakeet_free_wrapper);
     m.def("parakeet_full", &parakeet_full_wrapper,
           py::arg("ctx"), py::arg("params"), py::arg("samples"), py::arg("n_samples"));
