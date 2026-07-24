@@ -4,12 +4,10 @@
 
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
-#include <pybind11/stl.h>
 
 #include "parakeet.h"
 
 #include <cstring>
-#include <string>
 
 namespace py = pybind11;
 
@@ -80,13 +78,11 @@ static py::bytes parakeet_full_get_segment_text_wrapper(
     if (!c_array) {
         return py::bytes("", 0);
     }
-    size_t length = strlen(c_array);
-    return py::bytes(c_array, length);
+    return py::bytes(c_array, strlen(c_array));
 }
 
 void init_parakeet_bindings(py::module_ & m) {
     m.attr("PARAKEET_SAMPLE_RATE") = PARAKEET_SAMPLE_RATE;
-    m.attr("PARAKEET_HOP_LENGTH") = PARAKEET_HOP_LENGTH;
 
     py::enum_<parakeet_sampling_strategy>(m, "parakeet_sampling_strategy")
         .value("PARAKEET_SAMPLING_GREEDY", parakeet_sampling_strategy::PARAKEET_SAMPLING_GREEDY)
@@ -108,41 +104,18 @@ void init_parakeet_bindings(py::module_ & m) {
         .def_readwrite("no_context", &parakeet_full_params::no_context)
         .def_readwrite("audio_ctx", &parakeet_full_params::audio_ctx);
 
-    m.def("parakeet_version", &parakeet_version,
-          "Return the Parakeet library version string.");
-
-    m.def("parakeet_context_default_params", &parakeet_context_default_params,
-          "Return default Parakeet context parameters.");
-
-    m.def("parakeet_full_default_params", &parakeet_full_default_params,
-          "Return default Parakeet full-params for the given sampling strategy.",
-          py::arg("strategy"));
-
+    m.def("parakeet_version", &parakeet_version);
+    m.def("parakeet_context_default_params", &parakeet_context_default_params);
+    m.def("parakeet_full_default_params", &parakeet_full_default_params, py::arg("strategy"));
     m.def("parakeet_init_from_file_with_params",
           &parakeet_init_from_file_with_params_wrapper,
-          "Load a Parakeet GGUF model from path. Returns a context (ptr may be null on failure).",
           py::arg("path_model"), py::arg("params"),
           py::call_guard<py::gil_scoped_release>());
-
-    m.def("parakeet_free", &parakeet_free_wrapper,
-          "Free memory allocated for a Parakeet context.");
-
+    m.def("parakeet_free", &parakeet_free_wrapper);
     m.def("parakeet_full", &parakeet_full_wrapper,
-          "Run full Parakeet inference on float32 PCM samples (16 kHz mono).",
           py::arg("ctx"), py::arg("params"), py::arg("samples"), py::arg("n_samples"));
-
-    m.def("parakeet_full_n_segments", &parakeet_full_n_segments_wrapper,
-          "Number of text segments produced by the last parakeet_full() call.");
-
-    m.def("parakeet_full_get_segment_t0", &parakeet_full_get_segment_t0_wrapper,
-          "Start time of segment i (centiseconds, same convention as whisper).");
-
-    m.def("parakeet_full_get_segment_t1", &parakeet_full_get_segment_t1_wrapper,
-          "End time of segment i (centiseconds, same convention as whisper).");
-
-    m.def("parakeet_full_get_segment_text", &parakeet_full_get_segment_text_wrapper,
-          "Text of segment i as bytes (decode as UTF-8).");
-
-    m.def("parakeet_print_system_info", &parakeet_print_system_info,
-          "Print system / backend information for Parakeet.");
+    m.def("parakeet_full_n_segments", &parakeet_full_n_segments_wrapper);
+    m.def("parakeet_full_get_segment_t0", &parakeet_full_get_segment_t0_wrapper);
+    m.def("parakeet_full_get_segment_t1", &parakeet_full_get_segment_t1_wrapper);
+    m.def("parakeet_full_get_segment_text", &parakeet_full_get_segment_text_wrapper);
 }

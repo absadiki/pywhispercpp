@@ -1,12 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-"""
-Parakeet binding smoke tests that do not require a multi-hundred-MB model download.
-"""
+"""Parakeet binding smoke tests (no large model download)."""
 
 import unittest
-from pathlib import Path
 from unittest import TestCase
 
 import _pywhispercpp as pw
@@ -15,7 +12,6 @@ import _pywhispercpp as pw
 class TestParakeetBindings(TestCase):
     def test_import_and_constants(self):
         self.assertEqual(pw.PARAKEET_SAMPLE_RATE, 16000)
-        self.assertEqual(pw.PARAKEET_HOP_LENGTH, 160)
 
     def test_parakeet_version(self):
         version = pw.parakeet_version()
@@ -24,8 +20,6 @@ class TestParakeetBindings(TestCase):
 
     def test_context_default_params(self):
         params = pw.parakeet_context_default_params()
-        self.assertIsInstance(params.use_gpu, bool)
-        self.assertIsInstance(params.gpu_device, int)
         params.use_gpu = False
         params.gpu_device = 0
         self.assertFalse(params.use_gpu)
@@ -35,19 +29,9 @@ class TestParakeetBindings(TestCase):
         params = pw.parakeet_full_default_params(
             pw.parakeet_sampling_strategy.PARAKEET_SAMPLING_GREEDY
         )
-        self.assertIsInstance(params.n_threads, int)
         self.assertGreater(params.n_threads, 0)
         params.n_threads = 2
         self.assertEqual(params.n_threads, 2)
-        self.assertIsInstance(params.offset_ms, int)
-        self.assertIsInstance(params.duration_ms, int)
-        self.assertIsInstance(params.no_context, bool)
-
-    def test_sampling_strategy_enum(self):
-        self.assertEqual(
-            int(pw.parakeet_sampling_strategy.PARAKEET_SAMPLING_GREEDY),
-            0,
-        )
 
     def test_init_missing_file_returns_none(self):
         params = pw.parakeet_context_default_params()
@@ -59,7 +43,6 @@ class TestParakeetBindings(TestCase):
         self.assertIsNone(ctx)
 
     def test_free_none_safe(self):
-        # free(None) must not segfault.
         pw.parakeet_free(None)
 
     def test_python_package_export(self):

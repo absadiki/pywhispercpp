@@ -1385,7 +1385,6 @@ PYBIND11_MODULE(_pywhispercpp, m) {
     m.def("whisper_vad_free_segments", &whisper_vad_free_segments_wrapper);
     m.def("whisper_vad_free", &whisper_vad_free_wrapper);
 
-    // Parakeet (separate C API in whisper.cpp; see include/parakeet.h)
     init_parakeet_bindings(m);
 
 #ifdef VERSION_INFO
