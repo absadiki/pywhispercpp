@@ -126,6 +126,19 @@ segments = model.transcribe('file.mp3', new_segment_callback=print)
 * You can pass any `whisper.cpp` [parameter](https://absadiki.github.io/pywhispercpp/#pywhispercpp.constants.PARAMS_SCHEMA) as a keyword argument to the `Model` class or to the `transcribe` function.
 * Check the [Model](https://absadiki.github.io/pywhispercpp/#pywhispercpp.model.Model) class documentation for more details.
 
+### Parakeet (NVIDIA)
+
+Parakeet is a separate whisper.cpp API from Whisper. Point `ParakeetModel` at a local GGUF (for example from [ggml-org/parakeet-GGUF](https://huggingface.co/ggml-org/parakeet-GGUF)); there is no automatic download helper yet.
+
+```python
+from pywhispercpp import ParakeetModel
+
+model = ParakeetModel("/path/to/ggml-parakeet-tdt-0.6b-v3-q5_0.bin", n_threads=4)
+segments = model.transcribe("file.wav")
+for segment in segments:
+    print(segment.text)
+```
+
 # Examples
 
 ## CLI

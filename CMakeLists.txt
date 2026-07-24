@@ -6,7 +6,11 @@ add_subdirectory(whisper.cpp)
 
 pybind11_add_module(_pywhispercpp
 	src/main.cpp
+	src/parakeet_bindings.cpp
 )
 
-target_link_libraries (_pywhispercpp PRIVATE whisper)
-
+target_link_libraries(_pywhispercpp PRIVATE whisper parakeet)
+target_include_directories(_pywhispercpp PRIVATE
+	${CMAKE_CURRENT_SOURCE_DIR}/whisper.cpp/include
+	${CMAKE_CURRENT_SOURCE_DIR}/whisper.cpp/ggml/include
+)
