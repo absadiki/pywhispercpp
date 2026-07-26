@@ -1,0 +1,1371 @@
+#include <pybind11/pybind11.h>
+#include <pybind11/stl.h>
+#include <pybind11/functional.h>
+#include <pybind11/numpy.h>
+
+#include "whisper.h"
+
+
+#define STRINGIFY(x) #x
+#define MACRO_STRINGIFY(x) STRINGIFY(x)
+
+#define DEF_RELEASE_GIL(name, fn, doc) \
+    m.def(name, fn, doc, py::call_guard<py::gil_scoped_release>())
+
+
+namespace py = pybind11;
+using namespace pybind11::literals; // to bring in the `_a` literal
+
+inline bool has_python_user_data(const py::object & obj) {
+    return obj.ptr() != nullptr && obj.ptr() != Py_None;
+}
+
+
+py::object py_log_callback;
+
+
+// whisper context wrapper, to solve the incomplete type issue
+// Thanks to https://github.com/pybind/pybind11/issues/2770
+struct whisper_context_wrapper {
+    whisper_context* ptr;
+};
+
+// struct inside params
+struct greedy{
+    int best_of;
+};
+
+struct beam_search{
+    int beam_size;
+    float patience;
+};
+
+
+struct whisper_model_loader_wrapper {
+    whisper_model_loader* ptr;
+
+};
+
+struct whisper_context_wrapper whisper_init_from_file_with_params_wrapper(
+        const char * path_model,
+        struct whisper_context_params cparams){
+    struct whisper_context * ctx = whisper_init_from_file_with_params(path_model, cparams);
+    struct whisper_context_wrapper ctw_w;
+    ctw_w.ptr = ctx;
+    return ctw_w;
+}
+
+struct whisper_context_wrapper whisper_init_from_buffer_with_params_wrapper(
+        void * buffer,
+        size_t buffer_size,
+        struct whisper_context_params cparams){
+    struct whisper_context * ctx = whisper_init_from_buffer_with_params(buffer, buffer_size, cparams);
+    struct whisper_context_wrapper ctw_w;
+    ctw_w.ptr = ctx;
+    return ctw_w;
+}
+
+struct whisper_context_wrapper whisper_init_with_params_wrapper(
+        struct whisper_model_loader_wrapper * loader,
+        struct whisper_context_params cparams){
+    struct whisper_context * ctx = whisper_init_with_params(loader->ptr, cparams);
+    struct whisper_context_wrapper ctw_w;
+    ctw_w.ptr = ctx;
+    return ctw_w;
+};
+
+void whisper_free_wrapper(struct whisper_context_wrapper * ctx_w){
+    whisper_free(ctx_w->ptr);
+};
+
+int whisper_pcm_to_mel_wrapper(
+        struct whisper_context_wrapper * ctx,
+        py::array_t<float> samples,
+        int   n_samples,
+        int   n_threads){
+    py::buffer_info buf = samples.request();
+    float *samples_ptr = static_cast<float *>(buf.ptr);
+    return whisper_pcm_to_mel(ctx->ptr, samples_ptr, n_samples, n_threads);
+};
+
+int whisper_set_mel_wrapper(
+        struct whisper_context_wrapper * ctx,
+        py::array_t<float> data,
+        int   n_len,
+        int   n_mel){
+    py::buffer_info buf = data.request();
+    float *data_ptr = static_cast<float *>(buf.ptr);
+    return whisper_set_mel(ctx->ptr, data_ptr, n_len, n_mel);
+
+};
+
+int whisper_n_len_wrapper(struct whisper_context_wrapper * ctx_w){
+    return whisper_n_len(ctx_w->ptr);
+};
+
+int whisper_n_vocab_wrapper(struct whisper_context_wrapper * ctx_w){
+    return whisper_n_vocab(ctx_w->ptr);
+};
+
+int whisper_n_text_ctx_wrapper(struct whisper_context_wrapper * ctx_w){
+    return whisper_n_text_ctx(ctx_w->ptr);
+};
+
+int whisper_n_audio_ctx_wrapper(struct whisper_context_wrapper * ctx_w){
+    return whisper_n_audio_ctx(ctx_w->ptr);
+}
+
+int whisper_is_multilingual_wrapper(struct whisper_context_wrapper * ctx_w){
+    return whisper_is_multilingual(ctx_w->ptr);
+}
+
+
+float * whisper_get_logits_wrapper(struct whisper_context_wrapper * ctx_w){
+    return whisper_get_logits(ctx_w->ptr);
+};
+
+const char * whisper_token_to_str_wrapper(struct whisper_context_wrapper * ctx_w, whisper_token token){
+    return whisper_token_to_str(ctx_w->ptr, token);
+};
+
+py::bytes whisper_token_to_bytes_wrapper(struct whisper_context_wrapper * ctx_w, whisper_token token){
+    const char* str = whisper_token_to_str(ctx_w->ptr, token);
+    size_t l = strlen(str);
+    return py::bytes(str, l);
+}
+
+whisper_token whisper_token_eot_wrapper(struct whisper_context_wrapper * ctx_w){
+    return whisper_token_eot(ctx_w->ptr);
+}
+
+whisper_token whisper_token_sot_wrapper(struct whisper_context_wrapper * ctx_w){
+    return whisper_token_sot(ctx_w->ptr);
+}
+
+whisper_token whisper_token_prev_wrapper(struct whisper_context_wrapper * ctx_w){
+    return whisper_token_prev(ctx_w->ptr);
+}
+
+whisper_token whisper_token_solm_wrapper(struct whisper_context_wrapper * ctx_w){
+    return whisper_token_solm(ctx_w->ptr);
+}
+
+whisper_token whisper_token_not_wrapper(struct whisper_context_wrapper * ctx_w){
+    return whisper_token_not(ctx_w->ptr);
+}
+
+whisper_token whisper_token_beg_wrapper(struct whisper_context_wrapper * ctx_w){
+    return whisper_token_beg(ctx_w->ptr);
+}
+
+whisper_token whisper_token_lang_wrapper(struct whisper_context_wrapper * ctx_w, int lang_id){
+    return whisper_token_lang(ctx_w->ptr, lang_id);
+}
+
+whisper_token whisper_token_translate_wrapper(struct whisper_context_wrapper * ctx_w){
+    return whisper_token_translate(ctx_w->ptr);
+}
+
+whisper_token whisper_token_transcribe_wrapper(struct whisper_context_wrapper * ctx_w){
+    return whisper_token_transcribe(ctx_w->ptr);
+}
+
+void whisper_print_timings_wrapper(struct whisper_context_wrapper * ctx_w){
+    return whisper_print_timings(ctx_w->ptr);
+}
+
+void whisper_reset_timings_wrapper(struct whisper_context_wrapper * ctx_w){
+    return whisper_reset_timings(ctx_w->ptr);
+}
+
+int whisper_encode_wrapper(
+        struct whisper_context_wrapper * ctx,
+        int   offset,
+        int   n_threads){
+    return whisper_encode(ctx->ptr, offset, n_threads);
+}
+
+
+int whisper_decode_wrapper(
+        struct whisper_context_wrapper * ctx,
+        const whisper_token * tokens,
+        int   n_tokens,
+        int   n_past,
+        int   n_threads){
+    return whisper_decode(ctx->ptr, tokens, n_tokens, n_past, n_threads);
+};
+
+int whisper_tokenize_wrapper(
+        struct whisper_context_wrapper * ctx,
+        const char * text,
+        whisper_token * tokens,
+        int   n_max_tokens){
+    return whisper_tokenize(ctx->ptr, text, tokens, n_max_tokens);
+};
+
+int whisper_lang_auto_detect_wrapper(
+        struct whisper_context_wrapper * ctx,
+        int   offset_ms,
+        int   n_threads,
+        py::array_t<float> lang_probs){
+
+    py::buffer_info buf = lang_probs.request();
+    float *lang_probs_ptr = static_cast<float *>(buf.ptr);
+    return whisper_lang_auto_detect(ctx->ptr, offset_ms, n_threads, lang_probs_ptr);
+
+}
+
+int whisper_full_wrapper(
+        struct whisper_context_wrapper * ctx_w,
+        struct whisper_full_params   params,
+        py::array_t<float> samples,
+        int   n_samples){
+    py::buffer_info buf = samples.request();
+    float *samples_ptr = static_cast<float *>(buf.ptr);
+
+    py::gil_scoped_release release;
+    return whisper_full(ctx_w->ptr, params, samples_ptr, n_samples);
+}
+
+int whisper_full_parallel_wrapper(
+        struct whisper_context_wrapper * ctx_w,
+        struct whisper_full_params   params,
+        py::array_t<float> samples,
+        int   n_samples,
+        int n_processors){
+    py::buffer_info buf = samples.request();
+    float *samples_ptr = static_cast<float *>(buf.ptr);
+
+    py::gil_scoped_release release;
+    return whisper_full_parallel(ctx_w->ptr, params, samples_ptr, n_samples, n_processors);
+}
+
+
+int whisper_full_n_segments_wrapper(struct whisper_context_wrapper * ctx){
+    py::gil_scoped_release release;
+    return whisper_full_n_segments(ctx->ptr);
+}
+
+int whisper_full_lang_id_wrapper(struct whisper_context_wrapper * ctx){
+    return whisper_full_lang_id(ctx->ptr);
+}
+
+int64_t whisper_full_get_segment_t0_wrapper(struct whisper_context_wrapper * ctx, int i_segment){
+    return whisper_full_get_segment_t0(ctx->ptr, i_segment);
+}
+
+int64_t whisper_full_get_segment_t1_wrapper(struct whisper_context_wrapper * ctx, int i_segment){
+    return whisper_full_get_segment_t1(ctx->ptr, i_segment);
+}
+
+// https://pybind11.readthedocs.io/en/stable/advanced/cast/strings.html
+const py::bytes whisper_full_get_segment_text_wrapper(struct whisper_context_wrapper * ctx, int i_segment){
+    const char * c_array = whisper_full_get_segment_text(ctx->ptr, i_segment);
+    size_t length = strlen(c_array); // Determine the length of the array
+    return py::bytes(c_array, length); // Return the data without transcoding
+};
+
+int whisper_full_n_tokens_wrapper(struct whisper_context_wrapper * ctx, int i_segment){
+     return whisper_full_n_tokens(ctx->ptr, i_segment);
+}
+
+const char * whisper_full_get_token_text_wrapper(struct whisper_context_wrapper * ctx, int i_segment, int i_token){
+    return whisper_full_get_token_text(ctx->ptr, i_segment, i_token);
+}
+
+whisper_token whisper_full_get_token_id_wrapper(struct whisper_context_wrapper * ctx, int i_segment, int i_token){
+    return whisper_full_get_token_id(ctx->ptr, i_segment, i_token);
+}
+
+whisper_token_data whisper_full_get_token_data_wrapper(struct whisper_context_wrapper * ctx, int i_segment, int i_token){
+    return whisper_full_get_token_data(ctx->ptr, i_segment, i_token);
+}
+
+float whisper_full_get_token_p_wrapper(struct whisper_context_wrapper * ctx, int i_segment, int i_token){
+    return whisper_full_get_token_p(ctx->ptr, i_segment, i_token);
+}
+
+bool whisper_full_get_segment_speaker_turn_next_wrapper(struct whisper_context_wrapper * ctx, int i_segment){
+    return whisper_full_get_segment_speaker_turn_next(ctx->ptr, i_segment);
+}
+
+const char * whisper_model_type_readable_wrapper(struct whisper_context_wrapper * ctx_w){
+    return whisper_model_type_readable(ctx_w->ptr);
+}
+
+int whisper_model_n_vocab_wrapper(struct whisper_context_wrapper * ctx_w){
+    return whisper_model_n_vocab(ctx_w->ptr);
+}
+
+int whisper_model_n_audio_ctx_wrapper(struct whisper_context_wrapper * ctx_w){
+    return whisper_model_n_audio_ctx(ctx_w->ptr);
+}
+
+int whisper_model_n_audio_state_wrapper(struct whisper_context_wrapper * ctx_w){
+    return whisper_model_n_audio_state(ctx_w->ptr);
+}
+
+int whisper_model_n_audio_head_wrapper(struct whisper_context_wrapper * ctx_w){
+    return whisper_model_n_audio_head(ctx_w->ptr);
+}
+
+int whisper_model_n_audio_layer_wrapper(struct whisper_context_wrapper * ctx_w){
+    return whisper_model_n_audio_layer(ctx_w->ptr);
+}
+
+int whisper_model_n_text_ctx_wrapper(struct whisper_context_wrapper * ctx_w){
+    return whisper_model_n_text_ctx(ctx_w->ptr);
+}
+
+int whisper_model_n_text_state_wrapper(struct whisper_context_wrapper * ctx_w){
+    return whisper_model_n_text_state(ctx_w->ptr);
+}
+
+int whisper_model_n_text_head_wrapper(struct whisper_context_wrapper * ctx_w){
+    return whisper_model_n_text_head(ctx_w->ptr);
+}
+
+int whisper_model_n_text_layer_wrapper(struct whisper_context_wrapper * ctx_w){
+    return whisper_model_n_text_layer(ctx_w->ptr);
+}
+
+int whisper_model_n_mels_wrapper(struct whisper_context_wrapper * ctx_w){
+    return whisper_model_n_mels(ctx_w->ptr);
+}
+
+int whisper_model_ftype_wrapper(struct whisper_context_wrapper * ctx_w){
+    return whisper_model_ftype(ctx_w->ptr);
+}
+
+bool _abort_callback(void * user_data);
+void _new_segment_callback(struct whisper_context * ctx, struct whisper_state * state, int n_new, void * user_data);
+bool _encoder_begin_callback(struct whisper_context * ctx, struct whisper_state * state, void * user_data);
+void _logits_filter_callback(
+    struct whisper_context * ctx,
+    struct whisper_state * state,
+    const whisper_token_data * tokens,
+    int   n_tokens,
+    float * logits,
+    void * user_data);
+
+int whisper_ctx_init_openvino_encoder_wrapper(struct whisper_context_wrapper * ctx, const char * model_path,
+                    const char * device,
+                    const char * cache_dir){
+    return whisper_ctx_init_openvino_encoder(ctx->ptr, model_path, device, cache_dir);
+}
+
+struct WhisperFullParamsWrapper : public whisper_full_params {
+  std::string initial_prompt_str;
+  std::string suppress_regex_str;
+  std::string vad_model_path_str;
+    std::vector<whisper_token> prompt_token_storage;
+
+    void reset_progress_callback() {
+        progress_callback_user_data = this;
+        progress_callback = [](struct whisper_context* ctx, struct whisper_state* state, int progress, void* user_data) {
+            (void) ctx;
+            (void) state;
+            auto* self = static_cast<WhisperFullParamsWrapper*>(user_data);
+            if (self && self->print_progress) {
+                if (self->py_progress_callback) {
+                    py::gil_scoped_acquire gil;
+                    if (!has_python_user_data(self->py_progress_callback_user_data)) {
+                        self->py_progress_callback(progress);
+                    } else {
+                        self->py_progress_callback(progress, self->py_progress_callback_user_data);
+                    }
+                } else {
+                    fprintf(stderr, "Progress: %3d%%\n", progress);
+                }
+            }
+        };
+    }
+
+    void sync_prompt_tokens() {
+        prompt_tokens = prompt_token_storage.empty() ? nullptr : prompt_token_storage.data();
+        prompt_n_tokens = prompt_token_storage.size();
+    }
+public:
+    py::function py_new_segment_callback;
+        py::object py_new_segment_callback_user_data;
+        py::function py_encoder_begin_callback;
+        py::object py_encoder_begin_callback_user_data;
+  py::function py_progress_callback;
+    py::object py_progress_callback_user_data;
+        py::function py_logits_filter_callback;
+        py::object py_logits_filter_callback_user_data;
+    py::function py_abort_callback;
+    py::object py_abort_callback_user_data;
+  WhisperFullParamsWrapper(const whisper_full_params& params = whisper_full_params())
+    : whisper_full_params(params),
+      initial_prompt_str(params.initial_prompt ? params.initial_prompt : ""),
+      suppress_regex_str(params.suppress_regex ? params.suppress_regex : ""),
+            vad_model_path_str(params.vad_model_path ? params.vad_model_path : ""),
+                        prompt_token_storage(),
+                        py_new_segment_callback_user_data(py::none()),
+                        py_encoder_begin_callback_user_data(py::none()),
+            py_progress_callback_user_data(py::none()),
+                        py_logits_filter_callback_user_data(py::none()),
+            py_abort_callback(),
+            py_abort_callback_user_data(py::none())
+    {
+    initial_prompt = initial_prompt_str.empty() ? nullptr : initial_prompt_str.c_str();
+    suppress_regex = suppress_regex_str.empty() ? nullptr : suppress_regex_str.c_str();
+    vad_model_path = vad_model_path_str.empty() ? nullptr : vad_model_path_str.c_str();
+        new_segment_callback_user_data = this;
+        encoder_begin_callback_user_data = this;
+    abort_callback_user_data = this;
+        logits_filter_callback_user_data = this;
+                if (params.prompt_tokens && params.prompt_n_tokens > 0) {
+                        prompt_token_storage.assign(params.prompt_tokens, params.prompt_tokens + params.prompt_n_tokens);
+                }
+                sync_prompt_tokens();
+        reset_progress_callback();
+  }
+  WhisperFullParamsWrapper(const WhisperFullParamsWrapper& other)
+    : whisper_full_params(static_cast<whisper_full_params>(other)),  // Copy base struct
+      initial_prompt_str(other.initial_prompt_str),
+      suppress_regex_str(other.suppress_regex_str),
+      vad_model_path_str(other.vad_model_path_str),
+            prompt_token_storage(other.prompt_token_storage),
+            py_new_segment_callback(other.py_new_segment_callback),
+            py_new_segment_callback_user_data(other.py_new_segment_callback_user_data),
+            py_encoder_begin_callback(other.py_encoder_begin_callback),
+            py_encoder_begin_callback_user_data(other.py_encoder_begin_callback_user_data),
+            py_progress_callback(other.py_progress_callback),
+            py_progress_callback_user_data(other.py_progress_callback_user_data),
+            py_logits_filter_callback(other.py_logits_filter_callback),
+            py_logits_filter_callback_user_data(other.py_logits_filter_callback_user_data),
+            py_abort_callback(other.py_abort_callback),
+            py_abort_callback_user_data(other.py_abort_callback_user_data) {
+    // Reset pointers to new string copies
+    initial_prompt = initial_prompt_str.empty() ? nullptr : initial_prompt_str.c_str();
+    suppress_regex = suppress_regex_str.empty() ? nullptr : suppress_regex_str.c_str();
+    vad_model_path = vad_model_path_str.empty() ? nullptr : vad_model_path_str.c_str();
+        new_segment_callback_user_data = this;
+        encoder_begin_callback_user_data = this;
+    abort_callback_user_data = this;
+        logits_filter_callback_user_data = this;
+        sync_prompt_tokens();
+        reset_progress_callback();
+  }
+  void set_initial_prompt(const std::string& prompt) {
+    initial_prompt_str = prompt;
+    initial_prompt = initial_prompt_str.c_str();
+  }
+  void set_suppress_regex(const std::string& regex) {
+    suppress_regex_str = regex;
+    suppress_regex = suppress_regex_str.c_str();
+  }
+  void set_vad_model_path(const std::string& model_path) {
+    vad_model_path_str = model_path;
+    vad_model_path = vad_model_path_str.c_str();
+  }
+    py::tuple get_prompt_tokens() const {
+        py::tuple tokens(prompt_token_storage.size());
+        for (size_t index = 0; index < prompt_token_storage.size(); ++index) {
+            tokens[index] = prompt_token_storage[index];
+        }
+        return tokens;
+    }
+    void set_prompt_tokens(const std::vector<whisper_token>& tokens) {
+        prompt_token_storage = tokens;
+        sync_prompt_tokens();
+    }
+    void clear_prompt_tokens() {
+        prompt_token_storage.clear();
+        sync_prompt_tokens();
+    }
+    py::object get_new_segment_callback_user_data() const {
+        return py_new_segment_callback_user_data;
+    }
+    void set_new_segment_callback_user_data(py::object user_data) {
+        py_new_segment_callback_user_data = std::move(user_data);
+        new_segment_callback_user_data = this;
+    }
+    void set_new_segment_callback(py::function callback) {
+        py_new_segment_callback = std::move(callback);
+        new_segment_callback_user_data = this;
+        new_segment_callback = _new_segment_callback;
+    }
+    void clear_new_segment_callback() {
+        py_new_segment_callback = py::function();
+        new_segment_callback = nullptr;
+        new_segment_callback_user_data = this;
+    }
+    py::object get_encoder_begin_callback_user_data() const {
+        return py_encoder_begin_callback_user_data;
+    }
+    void set_encoder_begin_callback_user_data(py::object user_data) {
+        py_encoder_begin_callback_user_data = std::move(user_data);
+        encoder_begin_callback_user_data = this;
+    }
+    void set_encoder_begin_callback(py::function callback) {
+        py_encoder_begin_callback = std::move(callback);
+        encoder_begin_callback_user_data = this;
+        encoder_begin_callback = _encoder_begin_callback;
+    }
+    void clear_encoder_begin_callback() {
+        py_encoder_begin_callback = py::function();
+        encoder_begin_callback = nullptr;
+        encoder_begin_callback_user_data = this;
+    }
+    py::object get_progress_callback_user_data() const {
+        return py_progress_callback_user_data;
+    }
+    void set_progress_callback_user_data(py::object user_data) {
+        py_progress_callback_user_data = std::move(user_data);
+        progress_callback_user_data = this;
+    }
+    void set_progress_callback(py::function callback) {
+        py_progress_callback = std::move(callback);
+        reset_progress_callback();
+    }
+    void clear_progress_callback() {
+        py_progress_callback = py::function();
+        reset_progress_callback();
+    }
+    py::object get_logits_filter_callback_user_data() const {
+        return py_logits_filter_callback_user_data;
+    }
+    void set_logits_filter_callback_user_data(py::object user_data) {
+        py_logits_filter_callback_user_data = std::move(user_data);
+        logits_filter_callback_user_data = this;
+    }
+    void set_logits_filter_callback(py::function callback) {
+        py_logits_filter_callback = std::move(callback);
+        logits_filter_callback_user_data = this;
+        logits_filter_callback = _logits_filter_callback;
+    }
+    void clear_logits_filter_callback() {
+        py_logits_filter_callback = py::function();
+        logits_filter_callback = nullptr;
+        logits_filter_callback_user_data = this;
+    }
+    py::object get_abort_callback_user_data() const {
+        return py_abort_callback_user_data;
+    }
+    void set_abort_callback_user_data(py::object user_data) {
+        py_abort_callback_user_data = std::move(user_data);
+        abort_callback_user_data = this;
+    }
+    void set_abort_callback(py::function callback) {
+        py_abort_callback = std::move(callback);
+        abort_callback_user_data = this;
+        abort_callback = _abort_callback;
+    }
+    void clear_abort_callback() {
+        py_abort_callback = py::function();
+        abort_callback = nullptr;
+        abort_callback_user_data = this;
+    }
+};
+WhisperFullParamsWrapper  whisper_full_default_params_wrapper(enum whisper_sampling_strategy strategy) {
+    return WhisperFullParamsWrapper(whisper_full_default_params(strategy));
+}
+
+// callbacks mechanism
+
+void _new_segment_callback(struct whisper_context * ctx, struct whisper_state * state, int n_new, void * user_data){
+    (void) state;
+    struct whisper_context_wrapper ctx_w;
+    ctx_w.ptr = ctx;
+    auto * params = static_cast<WhisperFullParamsWrapper *>(user_data);
+    if (!params || !params->py_new_segment_callback) {
+        return;
+    }
+
+    py::gil_scoped_acquire gil;
+    py::function callback = params->py_new_segment_callback;
+    if (!has_python_user_data(params->py_new_segment_callback_user_data)) {
+        callback(ctx_w, n_new);
+    } else {
+        callback(ctx_w, n_new, params->py_new_segment_callback_user_data);
+    }
+};
+
+void assign_new_segment_callback(struct whisper_full_params *params_base, py::object callback){
+    auto * params = static_cast<WhisperFullParamsWrapper *>(params_base);
+    if (callback.is_none()) {
+        params->clear_new_segment_callback();
+        return;
+    }
+
+    params->set_new_segment_callback(callback.cast<py::function>());
+}
+
+void clear_new_segment_callback(struct whisper_full_params *params_base) {
+    auto * params = static_cast<WhisperFullParamsWrapper *>(params_base);
+    params->clear_new_segment_callback();
+};
+
+bool _encoder_begin_callback(struct whisper_context * ctx, struct whisper_state * state, void * user_data){
+    (void) state;
+    struct whisper_context_wrapper ctx_w;
+    ctx_w.ptr = ctx;
+    auto * params = static_cast<WhisperFullParamsWrapper *>(user_data);
+    if (!params || !params->py_encoder_begin_callback) {
+        return false;
+    }
+
+    py::gil_scoped_acquire gil;
+    py::function callback = params->py_encoder_begin_callback;
+    py::object result_py;
+    if (!has_python_user_data(params->py_encoder_begin_callback_user_data)) {
+        result_py = callback(ctx_w);
+    } else {
+        result_py = callback(ctx_w, params->py_encoder_begin_callback_user_data);
+    }
+    bool res = result_py.cast<bool>();
+    return res;
+}
+
+void assign_encoder_begin_callback(struct whisper_full_params *params_base, py::object callback){
+    auto * params = static_cast<WhisperFullParamsWrapper *>(params_base);
+    if (callback.is_none()) {
+        params->clear_encoder_begin_callback();
+        return;
+    }
+
+    params->set_encoder_begin_callback(callback.cast<py::function>());
+}
+
+void clear_encoder_begin_callback(struct whisper_full_params *params_base) {
+    auto * params = static_cast<WhisperFullParamsWrapper *>(params_base);
+    params->clear_encoder_begin_callback();
+}
+
+void _logits_filter_callback(
+        struct whisper_context * ctx,
+        struct whisper_state * state,
+        const whisper_token_data * tokens,
+        int   n_tokens,
+        float * logits,
+        void * user_data){
+    (void) state;
+    (void) tokens;
+    struct whisper_context_wrapper ctx_w;
+    ctx_w.ptr = ctx;
+    auto * params = static_cast<WhisperFullParamsWrapper *>(user_data);
+    if (!params || !params->py_logits_filter_callback) {
+        return;
+    }
+
+    py::gil_scoped_acquire gil;
+    py::function callback = params->py_logits_filter_callback;
+    if (!has_python_user_data(params->py_logits_filter_callback_user_data)) {
+        callback(ctx_w, n_tokens, logits);
+    } else {
+        callback(ctx_w, n_tokens, logits, params->py_logits_filter_callback_user_data);
+    }
+}
+
+void assign_logits_filter_callback(struct whisper_full_params *params_base, py::object callback){
+    auto * params = static_cast<WhisperFullParamsWrapper *>(params_base);
+    if (callback.is_none()) {
+        params->clear_logits_filter_callback();
+        return;
+    }
+
+    params->set_logits_filter_callback(callback.cast<py::function>());
+}
+
+void clear_logits_filter_callback(struct whisper_full_params *params_base) {
+    auto * params = static_cast<WhisperFullParamsWrapper *>(params_base);
+    params->clear_logits_filter_callback();
+}
+
+void assign_progress_callback(whisper_full_params *params_base, py::object callback) {
+    auto * params = static_cast<WhisperFullParamsWrapper *>(params_base);
+    if (callback.is_none()) {
+        params->clear_progress_callback();
+        return;
+    }
+
+    params->set_progress_callback(callback.cast<py::function>());
+}
+
+void clear_progress_callback(whisper_full_params *params_base) {
+    auto * params = static_cast<WhisperFullParamsWrapper *>(params_base);
+    params->clear_progress_callback();
+}
+
+bool _abort_callback(void * user_data) {
+    auto * params = static_cast<WhisperFullParamsWrapper *>(user_data);
+    if (!params || !params->py_abort_callback) {
+        return false;
+    }
+
+    py::gil_scoped_acquire gil;
+    py::function callback = params->py_abort_callback;
+    py::object result_py;
+    if (!has_python_user_data(params->py_abort_callback_user_data)) {
+        result_py = callback();
+    } else {
+        result_py = callback(params->py_abort_callback_user_data);
+    }
+    return result_py.cast<bool>();
+}
+
+void assign_abort_callback(whisper_full_params *params_base, py::object callback){
+    auto * params = static_cast<WhisperFullParamsWrapper *>(params_base);
+    if (callback.is_none()) {
+        params->clear_abort_callback();
+        return;
+    }
+
+    params->set_abort_callback(callback.cast<py::function>());
+}
+
+void clear_abort_callback(whisper_full_params *params_base) {
+    auto * params = static_cast<WhisperFullParamsWrapper *>(params_base);
+    params->clear_abort_callback();
+}
+
+void whisper_log_set_wrapper(py::object callback) {
+    if (callback.is_none()) {
+        py_log_callback = py::none();
+        whisper_log_set(nullptr, nullptr);
+        return;
+    }
+
+    py_log_callback = callback.cast<py::function>();
+    whisper_log_set(
+        [](enum ggml_log_level level, const char * text, void * user_data) {
+            (void) user_data;
+            py::gil_scoped_acquire gil;
+            py::function log_callback = py_log_callback.cast<py::function>();
+            log_callback(py::int_(static_cast<int>(level)), py::str(text ? text : ""));
+        },
+        nullptr);
+}
+
+py::dict get_greedy(whisper_full_params * params){
+    py::dict d("best_of"_a=params->greedy.best_of);
+    return d;
+}
+
+
+// Voice Activity Detection (VAD)
+struct whisper_vad_context_wrapper {
+    whisper_vad_context* ptr;
+};
+
+struct whisper_vad_context_wrapper whisper_vad_init_from_file_with_params_wrapper(const char * path_model, struct whisper_vad_context_params params){
+    struct whisper_vad_context * ctx = whisper_vad_init_from_file_with_params(path_model, params);
+    struct whisper_vad_context_wrapper ctw_w;
+    ctw_w.ptr = ctx;
+    return ctw_w;
+}
+
+bool whisper_vad_detect_speech_wrapper(
+        struct whisper_vad_context_wrapper * ctx,
+        py::array_t<float> samples,
+        int   n_samples){
+    py::buffer_info buf = samples.request();
+    float *samples_ptr = static_cast<float *>(buf.ptr);
+
+    py::gil_scoped_release release;
+    return whisper_vad_detect_speech(ctx->ptr, samples_ptr, n_samples);
+}
+
+int whisper_vad_n_probs_wrapper(struct whisper_vad_context_wrapper * ctx){
+    return whisper_vad_n_probs(ctx->ptr);
+}
+
+py::array_t<float> whisper_vad_probs_wrapper(struct whisper_vad_context_wrapper * ctx) {
+    float * probs_ptr = whisper_vad_probs(ctx->ptr);
+    int n_probs = whisper_vad_n_probs(ctx->ptr);
+
+    if (probs_ptr == nullptr || n_probs <= 0) {
+        return py::array_t<float>(0);
+    }
+    return py::array_t<float>(
+        {n_probs},
+        {sizeof(float)},
+        probs_ptr
+    );
+}
+
+struct whisper_vad_segments_wrapper {
+    struct whisper_vad_segments * ptr;
+};
+
+struct whisper_vad_segments_wrapper whisper_vad_segments_from_probs_wrapper(
+            struct whisper_vad_context_wrapper * vctx_w,
+            struct whisper_vad_params    params
+            ){
+    struct whisper_vad_segments * wvs = whisper_vad_segments_from_probs(vctx_w->ptr, params);
+    struct whisper_vad_segments_wrapper wvs_w;
+    wvs_w.ptr = wvs;
+    return wvs_w;
+}
+
+struct whisper_vad_segments_wrapper whisper_vad_segments_from_samples_wrapper(
+            struct whisper_vad_context_wrapper * vctx_w,
+            struct whisper_vad_params    params,
+            py::array_t<float> samples,
+            int   n_samples){
+
+    py::buffer_info buf = samples.request();
+    float *samples_ptr = static_cast<float *>(buf.ptr);
+
+    struct whisper_vad_segments * wvs = whisper_vad_segments_from_samples(vctx_w->ptr, params, samples_ptr, n_samples);
+    struct whisper_vad_segments_wrapper wvs_w;
+    wvs_w.ptr = wvs;
+    return wvs_w;
+}
+
+int whisper_vad_segments_n_segments_wrapper(struct whisper_vad_segments_wrapper * segments_wrapper){
+    return whisper_vad_segments_n_segments(segments_wrapper->ptr);
+}
+
+float whisper_vad_segments_get_segment_t0_wrapper(struct whisper_vad_segments_wrapper * segments_wrapper, int i_segment) {
+    return whisper_vad_segments_get_segment_t0(segments_wrapper->ptr, i_segment);
+}
+
+float whisper_vad_segments_get_segment_t1_wrapper(struct whisper_vad_segments_wrapper * segments_wrapper, int i_segment) {
+    return whisper_vad_segments_get_segment_t1(segments_wrapper->ptr, i_segment);
+}
+
+void whisper_vad_free_segments_wrapper(struct whisper_vad_segments_wrapper * segments_wrapper){
+    return whisper_vad_free_segments(segments_wrapper->ptr);
+}
+
+void whisper_vad_free_wrapper(struct whisper_vad_context_wrapper  * ctx_w){
+    return whisper_vad_free(ctx_w->ptr);
+}
+
+////////////
+
+void whisper_bindings(py::module_ & m) {
+
+    m.attr("WHISPER_SAMPLE_RATE") = WHISPER_SAMPLE_RATE;
+    m.attr("WHISPER_N_FFT") = WHISPER_N_FFT;
+    m.attr("WHISPER_HOP_LENGTH") = WHISPER_HOP_LENGTH;
+    m.attr("WHISPER_CHUNK_SIZE") = WHISPER_CHUNK_SIZE;
+
+    py::enum_<whisper_alignment_heads_preset>(m, "whisper_alignment_heads_preset")
+        .value("WHISPER_AHEADS_NONE", whisper_alignment_heads_preset::WHISPER_AHEADS_NONE)
+        .value("WHISPER_AHEADS_N_TOP_MOST", whisper_alignment_heads_preset::WHISPER_AHEADS_N_TOP_MOST)
+        .value("WHISPER_AHEADS_CUSTOM", whisper_alignment_heads_preset::WHISPER_AHEADS_CUSTOM)
+        .value("WHISPER_AHEADS_TINY_EN", whisper_alignment_heads_preset::WHISPER_AHEADS_TINY_EN)
+        .value("WHISPER_AHEADS_TINY", whisper_alignment_heads_preset::WHISPER_AHEADS_TINY)
+        .value("WHISPER_AHEADS_BASE_EN", whisper_alignment_heads_preset::WHISPER_AHEADS_BASE_EN)
+        .value("WHISPER_AHEADS_BASE", whisper_alignment_heads_preset::WHISPER_AHEADS_BASE)
+        .value("WHISPER_AHEADS_SMALL_EN", whisper_alignment_heads_preset::WHISPER_AHEADS_SMALL_EN)
+        .value("WHISPER_AHEADS_SMALL", whisper_alignment_heads_preset::WHISPER_AHEADS_SMALL)
+        .value("WHISPER_AHEADS_MEDIUM_EN", whisper_alignment_heads_preset::WHISPER_AHEADS_MEDIUM_EN)
+        .value("WHISPER_AHEADS_MEDIUM", whisper_alignment_heads_preset::WHISPER_AHEADS_MEDIUM)
+        .value("WHISPER_AHEADS_LARGE_V1", whisper_alignment_heads_preset::WHISPER_AHEADS_LARGE_V1)
+        .value("WHISPER_AHEADS_LARGE_V2", whisper_alignment_heads_preset::WHISPER_AHEADS_LARGE_V2)
+        .value("WHISPER_AHEADS_LARGE_V3", whisper_alignment_heads_preset::WHISPER_AHEADS_LARGE_V3)
+        .value("WHISPER_AHEADS_LARGE_V3_TURBO", whisper_alignment_heads_preset::WHISPER_AHEADS_LARGE_V3_TURBO)
+        .export_values();
+
+    py::class_<whisper_context_wrapper>(m, "whisper_context");
+        py::class_<whisper_context_params>(m, "whisper_context_params")
+            .def(py::init<>())
+            .def_readwrite("use_gpu", &whisper_context_params::use_gpu)
+            .def_readwrite("flash_attn", &whisper_context_params::flash_attn)
+            .def_readwrite("gpu_device", &whisper_context_params::gpu_device)
+            .def_readwrite("dtw_token_timestamps", &whisper_context_params::dtw_token_timestamps)
+            .def_readwrite("dtw_aheads_preset", &whisper_context_params::dtw_aheads_preset)
+            .def_readwrite("dtw_n_top", &whisper_context_params::dtw_n_top)
+            .def_readwrite("dtw_mem_size", &whisper_context_params::dtw_mem_size);
+    py::class_<whisper_token>(m, "whisper_token")
+            .def(py::init<>());
+    py::class_<whisper_token_data>(m,"whisper_token_data")
+            .def(py::init<>())
+            .def_readwrite("id", &whisper_token_data::id)
+            .def_readwrite("tid", &whisper_token_data::tid)
+            .def_readwrite("p", &whisper_token_data::p)
+            .def_readwrite("plog", &whisper_token_data::plog)
+            .def_readwrite("pt", &whisper_token_data::pt)
+            .def_readwrite("ptsum", &whisper_token_data::ptsum)
+            .def_readwrite("t0", &whisper_token_data::t0)
+            .def_readwrite("t1", &whisper_token_data::t1)
+            .def_readwrite("t_dtw", &whisper_token_data::t_dtw)
+            .def_readwrite("vlen", &whisper_token_data::vlen);
+
+    py::class_<whisper_model_loader_wrapper>(m,"whisper_model_loader")
+            .def(py::init<>());
+
+        m.def("whisper_context_default_params", &whisper_context_default_params,
+            "Return the default context parameters used during model initialization.");
+        DEF_RELEASE_GIL("whisper_init_from_file_with_params", &whisper_init_from_file_with_params_wrapper, "Various functions for loading a ggml whisper model.\n"
+                                                  "Allocate (almost) all memory needed for the model.\n"
+                                                  "Return NULL on failure");
+        DEF_RELEASE_GIL("whisper_init_from_buffer_with_params", &whisper_init_from_buffer_with_params_wrapper, "Various functions for loading a ggml whisper model.\n"
+                                                    "Allocate (almost) all memory needed for the model.\n"
+                                                    "Return NULL on failure");
+        DEF_RELEASE_GIL("whisper_init_with_params", &whisper_init_with_params_wrapper, "Various functions for loading a ggml whisper model.\n"
+                                    "Allocate (almost) all memory needed for the model.\n"
+                                    "Return NULL on failure");
+
+
+    m.def("whisper_free", &whisper_free_wrapper, "Frees all memory allocated by the model.");
+
+    m.def("whisper_pcm_to_mel", &whisper_pcm_to_mel_wrapper, "Convert RAW PCM audio to log mel spectrogram.\n"
+                                                             "The resulting spectrogram is stored inside the provided whisper context.\n"
+                                                             "Returns 0 on success");
+
+    m.def("whisper_set_mel", &whisper_set_mel_wrapper, " This can be used to set a custom log mel spectrogram inside the provided whisper context.\n"
+                                                        "Use this instead of whisper_pcm_to_mel() if you want to provide your own log mel spectrogram.\n"
+                                                        "n_mel must be 80\n"
+                                                        "Returns 0 on success");
+
+    m.def("whisper_encode", &whisper_encode_wrapper, "Run the Whisper encoder on the log mel spectrogram stored inside the provided whisper context.\n"
+                                                    "Make sure to call whisper_pcm_to_mel() or whisper_set_mel() first.\n"
+                                                    "offset can be used to specify the offset of the first frame in the spectrogram.\n"
+                                                    "Returns 0 on success");
+
+    m.def("whisper_decode", &whisper_decode_wrapper, "Run the Whisper decoder to obtain the logits and probabilities for the next token.\n"
+                                                    "Make sure to call whisper_encode() first.\n"
+                                                    "tokens + n_tokens is the provided context for the decoder.\n"
+                                                    "n_past is the number of tokens to use from previous decoder calls.\n"
+                                                    "Returns 0 on success\n"
+                                                    "TODO: add support for multiple decoders");
+
+    m.def("whisper_tokenize", &whisper_tokenize_wrapper, "Convert the provided text into tokens.\n"
+                                                        "The tokens pointer must be large enough to hold the resulting tokens.\n"
+                                                        "Returns the number of tokens on success, no more than n_max_tokens\n"
+                                                        "Returns -1 on failure\n"
+                                                        "TODO: not sure if correct");
+
+    m.def("whisper_lang_max_id", &whisper_lang_max_id, "Largest language id (i.e. number of available languages - 1)");
+    m.def("whisper_lang_id", &whisper_lang_id, "Return the id of the specified language, returns -1 if not found\n"
+                                                "Examples:\n"
+                                                "\"de\" -> 2\n"
+                                                "\"german\" -> 2");
+    m.def("whisper_lang_str", &whisper_lang_str, "Return the short string of the specified language id (e.g. 2 -> \"de\"), returns nullptr if not found");
+
+
+
+
+
+
+
+    m.def("whisper_lang_auto_detect", &whisper_lang_auto_detect_wrapper, "Use mel data at offset_ms to try and auto-detect the spoken language\n"
+                                                                    "Make sure to call whisper_pcm_to_mel() or whisper_set_mel() first\n"
+                                                                    "Returns the top language id or negative on failure\n"
+                                                                    "If not null, fills the lang_probs array with the probabilities of all languages\n"
+                                                                    "The array must be whispe_lang_max_id() + 1 in size\n"
+                                                                    "ref: https://github.com/openai/whisper/blob/main/whisper/decoding.py#L18-L69\n");
+    m.def("whisper_n_len", &whisper_n_len_wrapper, "whisper_n_len");
+    m.def("whisper_n_vocab", &whisper_n_vocab_wrapper, "wrapper_whisper_n_vocab");
+    m.def("whisper_n_text_ctx", &whisper_n_text_ctx_wrapper, "whisper_n_text_ctx");
+    m.def("whisper_n_audio_ctx", &whisper_n_audio_ctx_wrapper, "whisper_n_audio_ctx");
+    m.def("whisper_is_multilingual", &whisper_is_multilingual_wrapper, "whisper_is_multilingual");
+    m.def("whisper_get_logits", &whisper_get_logits_wrapper, "Token logits obtained from the last call to whisper_decode()\n"
+                                                            "The logits for the last token are stored in the last row\n"
+                                                            "Rows: n_tokens\n"
+                                                            "Cols: n_vocab");
+
+
+    m.def("whisper_token_to_str", &whisper_token_to_str_wrapper, "whisper_token_to_str");
+    m.def("whisper_token_to_bytes", &whisper_token_to_bytes_wrapper, "whisper_token_to_bytes");
+    m.def("whisper_token_eot", &whisper_token_eot_wrapper, "whisper_token_eot");
+    m.def("whisper_token_sot", &whisper_token_sot_wrapper, "whisper_token_sot");
+    m.def("whisper_token_prev", &whisper_token_prev_wrapper);
+    m.def("whisper_token_solm", &whisper_token_solm_wrapper);
+    m.def("whisper_token_not", &whisper_token_not_wrapper);
+    m.def("whisper_token_beg", &whisper_token_beg_wrapper);
+    m.def("whisper_token_lang", &whisper_token_lang_wrapper);
+
+    m.def("whisper_token_translate", &whisper_token_translate_wrapper);
+    m.def("whisper_token_transcribe", &whisper_token_transcribe_wrapper);
+
+    m.def("whisper_print_timings", &whisper_print_timings_wrapper);
+    m.def("whisper_reset_timings", &whisper_reset_timings_wrapper);
+
+    m.def("whisper_print_system_info", &whisper_print_system_info);
+
+
+
+    //////////////////////
+
+    py::enum_<whisper_sampling_strategy>(m, "whisper_sampling_strategy")
+        .value("WHISPER_SAMPLING_GREEDY", whisper_sampling_strategy::WHISPER_SAMPLING_GREEDY)
+        .value("WHISPER_SAMPLING_BEAM_SEARCH", whisper_sampling_strategy::WHISPER_SAMPLING_BEAM_SEARCH)
+        .export_values();
+
+    py::class_<whisper_full_params>(m, "__whisper_full_params__internal")
+        .def(py::init<>())
+        .def("__repr__", [](const whisper_full_params& self) {
+            std::ostringstream oss;
+            oss << "whisper_full_params("
+                << "strategy=" << self.strategy << ", "
+                << "n_threads=" << self.n_threads << ", "
+                << "n_max_text_ctx=" << self.n_max_text_ctx << ", "
+                << "offset_ms=" << self.offset_ms << ", "
+                << "duration_ms=" << self.duration_ms << ", "
+                << "translate=" << (self.translate ? "True" : "False") << ", "
+                << "no_context=" << (self.no_context ? "True" : "False") << ", "
+                << "no_timestamps=" << (self.no_timestamps ? "True" : "False") << ", "
+                << "single_segment=" << (self.single_segment ? "True" : "False") << ", "
+                << "print_special=" << (self.print_special ? "True" : "False") << ", "
+                << "print_progress=" << (self.print_progress ? "True" : "False") << ", "
+                << "print_realtime=" << (self.print_realtime ? "True" : "False") << ", "
+                << "print_timestamps=" << (self.print_timestamps ? "True" : "False") << ", "
+                << "token_timestamps=" << (self.token_timestamps ? "True" : "False") << ", "
+                << "thold_pt=" << self.thold_pt << ", "
+                << "thold_ptsum=" << self.thold_ptsum << ", "
+                << "max_len=" << self.max_len << ", "
+                << "split_on_word=" << (self.split_on_word ? "True" : "False") << ", "
+                << "max_tokens=" << self.max_tokens << ", "
+                << "debug_mode=" << (self.debug_mode ? "True" : "False") << ", "
+                << "audio_ctx=" << self.audio_ctx << ", "
+                << "tdrz_enable=" << (self.tdrz_enable ? "True" : "False") << ", "
+                << "suppress_regex=" << (self.suppress_regex ? self.suppress_regex : "None") << ", "
+                << "initial_prompt=" << (self.initial_prompt ? self.initial_prompt : "None") << ", "
+                << "prompt_tokens=" << (self.prompt_tokens ? "(whisper_token *)" : "None") << ", "
+                << "prompt_n_tokens=" << self.prompt_n_tokens << ", "
+                << "language=" << (self.language ? self.language : "None") << ", "
+                << "detect_language=" << (self.detect_language ? "True" : "False") << ", "
+                << "suppress_blank=" << (self.suppress_blank ? "True" : "False") << ", "
+                << "temperature=" << self.temperature << ", "
+                << "max_initial_ts=" << self.max_initial_ts << ", "
+                << "length_penalty=" << self.length_penalty << ", "
+                << "temperature_inc=" << self.temperature_inc << ", "
+                << "entropy_thold=" << self.entropy_thold << ", "
+                << "logprob_thold=" << self.logprob_thold << ", "
+                << "no_speech_thold=" << self.no_speech_thold << ", "
+                << "greedy={best_of=" << self.greedy.best_of << "}, "
+                << "beam_search={beam_size=" << self.beam_search.beam_size << ", patience=" << self.beam_search.patience << "}, "
+                << "new_segment_callback=" << (self.new_segment_callback ? "(function pointer)" : "None") << ", "
+                << "progress_callback=" << (self.progress_callback ? "(function pointer)" : "None") << ", "
+                << "encoder_begin_callback=" << (self.encoder_begin_callback ? "(function pointer)" : "None") << ", "
+                << "abort_callback=" << (self.abort_callback ? "(function pointer)" : "None") << ", "
+                << "logits_filter_callback=" << (self.logits_filter_callback ? "(function pointer)" : "None")
+                << ")";
+            return oss.str();
+        });
+
+    py::class_<WhisperFullParamsWrapper, whisper_full_params>(m, "whisper_full_params")
+        .def(py::init<>())
+        .def_readwrite("strategy", &WhisperFullParamsWrapper::strategy)
+        .def_readwrite("n_threads", &WhisperFullParamsWrapper::n_threads)
+        .def_readwrite("n_max_text_ctx", &WhisperFullParamsWrapper::n_max_text_ctx)
+        .def_readwrite("offset_ms", &WhisperFullParamsWrapper::offset_ms)
+        .def_readwrite("duration_ms", &WhisperFullParamsWrapper::duration_ms)
+        .def_readwrite("translate", &WhisperFullParamsWrapper::translate)
+        .def_readwrite("no_context", &WhisperFullParamsWrapper::no_context)
+        .def_readwrite("no_timestamps", &WhisperFullParamsWrapper::no_timestamps)
+        .def_readwrite("single_segment", &WhisperFullParamsWrapper::single_segment)
+        .def_readwrite("print_special", &WhisperFullParamsWrapper::print_special)
+        .def_readwrite("print_progress", &WhisperFullParamsWrapper::print_progress)
+        .def_readwrite("progress_callback", &WhisperFullParamsWrapper::py_progress_callback)
+        .def("set_progress_callback",
+             [](WhisperFullParamsWrapper &self, py::object callback) {
+                 if (callback.is_none()) {
+                     self.clear_progress_callback();
+                 } else {
+                     self.set_progress_callback(callback.cast<py::function>());
+                 }
+             },
+             py::arg("callback") = py::none(),
+             "Assign a progress callback that receives progress updates.")
+        .def("clear_progress_callback", &WhisperFullParamsWrapper::clear_progress_callback,
+             "Clear any previously assigned progress callback while preserving default progress behavior.")
+        .def_readwrite("print_realtime", &WhisperFullParamsWrapper::print_realtime)
+        .def_readwrite("print_timestamps", &WhisperFullParamsWrapper::print_timestamps)
+        .def_readwrite("token_timestamps", &WhisperFullParamsWrapper::token_timestamps)
+        .def_readwrite("thold_pt", &WhisperFullParamsWrapper::thold_pt)
+        .def_readwrite("thold_ptsum", &WhisperFullParamsWrapper::thold_ptsum)
+        .def_readwrite("max_len", &WhisperFullParamsWrapper::max_len)
+        .def_readwrite("split_on_word", &WhisperFullParamsWrapper::split_on_word)
+        .def_readwrite("max_tokens", &WhisperFullParamsWrapper::max_tokens)
+        .def_readwrite("debug_mode", &WhisperFullParamsWrapper::debug_mode)
+        .def_readwrite("audio_ctx", &WhisperFullParamsWrapper::audio_ctx)
+        .def_readwrite("tdrz_enable", &WhisperFullParamsWrapper::tdrz_enable)
+        .def_property("suppress_regex",
+            [](WhisperFullParamsWrapper &self) {
+                return py::str(self.suppress_regex ? self.suppress_regex : "");
+            },
+            [](WhisperFullParamsWrapper &self, const std::string &new_c) {
+                self.set_suppress_regex(new_c);
+            })
+        .def_property("initial_prompt",
+        [](WhisperFullParamsWrapper &self) {
+                return py::str(self.initial_prompt ? self.initial_prompt : "");
+            },
+            [](WhisperFullParamsWrapper &self, const std::string &initial_prompt) {
+                self.set_initial_prompt(initial_prompt);
+            }
+        )
+        .def_property("prompt_tokens",
+            [](WhisperFullParamsWrapper &self) {
+                return self.get_prompt_tokens();
+            },
+            [](WhisperFullParamsWrapper &self, py::object tokens) {
+                if (tokens.is_none()) {
+                    self.clear_prompt_tokens();
+                } else {
+                    self.set_prompt_tokens(tokens.cast<std::vector<whisper_token>>());
+                }
+            })
+        .def("set_prompt_tokens", &WhisperFullParamsWrapper::set_prompt_tokens,
+             py::arg("tokens"),
+             "Assign prompt tokens from a Python sequence.")
+        .def("clear_prompt_tokens", &WhisperFullParamsWrapper::clear_prompt_tokens,
+             "Clear any previously assigned prompt tokens.")
+        .def("set_new_segment_callback",
+             [](WhisperFullParamsWrapper &self, py::object callback) {
+                 if (callback.is_none()) {
+                     self.clear_new_segment_callback();
+                 } else {
+                     self.set_new_segment_callback(callback.cast<py::function>());
+                 }
+             },
+             py::arg("callback") = py::none(),
+             "Assign a new-segment callback.")
+        .def("clear_new_segment_callback", &WhisperFullParamsWrapper::clear_new_segment_callback,
+             "Clear any previously assigned new-segment callback.")
+        .def("set_encoder_begin_callback",
+             [](WhisperFullParamsWrapper &self, py::object callback) {
+                 if (callback.is_none()) {
+                     self.clear_encoder_begin_callback();
+                 } else {
+                     self.set_encoder_begin_callback(callback.cast<py::function>());
+                 }
+             },
+             py::arg("callback") = py::none(),
+             "Assign an encoder-begin callback.")
+        .def("clear_encoder_begin_callback", &WhisperFullParamsWrapper::clear_encoder_begin_callback,
+             "Clear any previously assigned encoder-begin callback.")
+        .def("set_abort_callback",
+             [](WhisperFullParamsWrapper &self, py::object callback) {
+                 if (callback.is_none()) {
+                     self.clear_abort_callback();
+                 } else {
+                     self.set_abort_callback(callback.cast<py::function>());
+                 }
+             },
+             py::arg("callback") = py::none(),
+             "Assign an abort callback that returns True to stop processing.")
+        .def("clear_abort_callback", &WhisperFullParamsWrapper::clear_abort_callback,
+             "Clear any previously assigned abort callback.")
+        .def_readwrite("prompt_n_tokens", &WhisperFullParamsWrapper::prompt_n_tokens)
+        .def_readwrite("carry_initial_prompt", &WhisperFullParamsWrapper::carry_initial_prompt)
+        .def_property("language",
+            [](WhisperFullParamsWrapper &self) {
+                return py::str(self.language);
+            },
+            [](WhisperFullParamsWrapper &self, const char *new_c) {// using lang_id let us avoid issues with memory management
+                const int lang_id = (new_c && strlen(new_c) > 0) ? whisper_lang_id(new_c) : -1;
+                if (lang_id != -1) {
+                    self.language = whisper_lang_str(lang_id);
+                } else {
+                    self.language = ""; //defaults to auto-detect
+                }
+            })
+        .def_readwrite("detect_language", &WhisperFullParamsWrapper::detect_language)
+        .def_readwrite("suppress_blank", &WhisperFullParamsWrapper::suppress_blank)
+        .def_readwrite("suppress_nst", &WhisperFullParamsWrapper::suppress_nst)
+        .def_readwrite("temperature", &WhisperFullParamsWrapper::temperature)
+        .def_readwrite("max_initial_ts", &WhisperFullParamsWrapper::max_initial_ts)
+        .def_readwrite("length_penalty", &WhisperFullParamsWrapper::length_penalty)
+        .def_readwrite("temperature_inc", &WhisperFullParamsWrapper::temperature_inc)
+        .def_readwrite("entropy_thold", &WhisperFullParamsWrapper::entropy_thold)
+        .def_readwrite("logprob_thold", &WhisperFullParamsWrapper::logprob_thold)
+        .def_readwrite("no_speech_thold", &WhisperFullParamsWrapper::no_speech_thold)
+        // little hack for the internal stuct <undefined type issue>
+        .def_property("greedy", [](WhisperFullParamsWrapper &self) {return py::dict("best_of"_a=self.greedy.best_of);},
+                                 [](WhisperFullParamsWrapper &self, py::dict dict) {self.greedy.best_of = dict["best_of"].cast<int>();})
+        .def_property("beam_search", [](WhisperFullParamsWrapper &self) {return py::dict("beam_size"_a=self.beam_search.beam_size, "patience"_a=self.beam_search.patience);},
+                                [](WhisperFullParamsWrapper &self, py::dict dict) {self.beam_search.beam_size = dict["beam_size"].cast<int>(); self.beam_search.patience = dict["patience"].cast<float>();})
+        .def_property("new_segment_callback_user_data",
+            &WhisperFullParamsWrapper::get_new_segment_callback_user_data,
+            &WhisperFullParamsWrapper::set_new_segment_callback_user_data)
+        .def_property("progress_callback_user_data",
+            &WhisperFullParamsWrapper::get_progress_callback_user_data,
+            &WhisperFullParamsWrapper::set_progress_callback_user_data)
+        .def_property("encoder_begin_callback_user_data",
+            &WhisperFullParamsWrapper::get_encoder_begin_callback_user_data,
+            &WhisperFullParamsWrapper::set_encoder_begin_callback_user_data)
+        .def_property("abort_callback_user_data",
+            &WhisperFullParamsWrapper::get_abort_callback_user_data,
+            &WhisperFullParamsWrapper::set_abort_callback_user_data)
+        .def_property("logits_filter_callback_user_data",
+            &WhisperFullParamsWrapper::get_logits_filter_callback_user_data,
+            &WhisperFullParamsWrapper::set_logits_filter_callback_user_data)
+        .def("set_logits_filter_callback",
+             [](WhisperFullParamsWrapper &self, py::object callback) {
+                 if (callback.is_none()) {
+                     self.clear_logits_filter_callback();
+                 } else {
+                     self.set_logits_filter_callback(callback.cast<py::function>());
+                 }
+             },
+             py::arg("callback") = py::none(),
+             "Assign a logits-filter callback.")
+        .def("clear_logits_filter_callback", &WhisperFullParamsWrapper::clear_logits_filter_callback,
+             "Clear any previously assigned logits-filter callback.")
+        .def_readwrite("vad", &WhisperFullParamsWrapper::vad)
+        .def_property("vad_model_path",
+        [](WhisperFullParamsWrapper &self) {
+                return py::str(self.vad_model_path ? self.vad_model_path : "");
+            },
+            [](WhisperFullParamsWrapper &self, const std::string &vad_model_path) {
+                self.set_vad_model_path(vad_model_path);
+            }
+        )
+        .def_readwrite("vad_params", &WhisperFullParamsWrapper::vad_params);
+
+
+    py::implicitly_convertible<whisper_full_params, WhisperFullParamsWrapper>();
+
+    m.def("whisper_full_default_params", &whisper_full_default_params_wrapper);
+
+    m.def("whisper_full", &whisper_full_wrapper, "Run the entire model: PCM -> log mel spectrogram -> encoder -> decoder -> text\n"
+                                                 "Uses the specified decoding strategy to obtain the text.\n");
+
+    m.def("whisper_full_parallel", &whisper_full_parallel_wrapper, "Split the input audio in chunks and process each chunk separately using whisper_full()\n"
+                                                                    "It seems this approach can offer some speedup in some cases.\n"
+                                                                    "However, the transcription accuracy can be worse at the beginning and end of each chunk.");
+
+    m.def("whisper_full_n_segments", &whisper_full_n_segments_wrapper, "Number of generated text segments.\n"
+                                                                       "A segment can be a few words, a sentence, or even a paragraph.\n");
+
+    m.def("whisper_full_lang_id", &whisper_full_lang_id_wrapper, "Language id associated with the current context");
+    m.def("whisper_full_get_segment_t0", &whisper_full_get_segment_t0_wrapper, "Get the start time of the specified segment");
+    m.def("whisper_full_get_segment_t1", &whisper_full_get_segment_t1_wrapper, "Get the end time of the specified segment");
+        m.def("whisper_full_get_segment_speaker_turn_next", &whisper_full_get_segment_speaker_turn_next_wrapper,
+            "Get whether the next segment is predicted as a speaker turn.");
+
+    m.def("whisper_full_get_segment_text", &whisper_full_get_segment_text_wrapper, "Get the text of the specified segment");
+    m.def("whisper_full_n_tokens", &whisper_full_n_tokens_wrapper, "Get number of tokens in the specified segment.");
+
+    m.def("whisper_full_get_token_text", &whisper_full_get_token_text_wrapper, "Get the token text of the specified token in the specified segment.");
+    m.def("whisper_full_get_token_id", &whisper_full_get_token_id_wrapper, "Get the token text of the specified token in the specified segment.");
+
+    m.def("whisper_full_get_token_data", &whisper_full_get_token_data_wrapper, "Get token data for the specified token in the specified segment.\n"
+                                                                                "This contains probabilities, timestamps, etc.");
+
+    m.def("whisper_full_get_token_p", &whisper_full_get_token_p_wrapper, "Get the probability of the specified token in the specified segment.");
+
+    m.def("whisper_ctx_init_openvino_encoder", &whisper_ctx_init_openvino_encoder_wrapper, "Given a context, enable use of OpenVINO for encode inference.");
+    m.def("whisper_model_type_readable", &whisper_model_type_readable_wrapper, "Return the readable model type string.");
+    m.def("whisper_model_n_vocab", &whisper_model_n_vocab_wrapper, "Return the model vocabulary size.");
+    m.def("whisper_model_n_audio_ctx", &whisper_model_n_audio_ctx_wrapper, "Return the audio context size baked into the model.");
+    m.def("whisper_model_n_audio_state", &whisper_model_n_audio_state_wrapper, "Return the number of audio state units in the model.");
+    m.def("whisper_model_n_audio_head", &whisper_model_n_audio_head_wrapper, "Return the number of audio attention heads in the model.");
+    m.def("whisper_model_n_audio_layer", &whisper_model_n_audio_layer_wrapper, "Return the number of audio layers in the model.");
+    m.def("whisper_model_n_text_ctx", &whisper_model_n_text_ctx_wrapper, "Return the text context size baked into the model.");
+    m.def("whisper_model_n_text_state", &whisper_model_n_text_state_wrapper, "Return the number of text state units in the model.");
+    m.def("whisper_model_n_text_head", &whisper_model_n_text_head_wrapper, "Return the number of text attention heads in the model.");
+    m.def("whisper_model_n_text_layer", &whisper_model_n_text_layer_wrapper, "Return the number of text layers in the model.");
+    m.def("whisper_model_n_mels", &whisper_model_n_mels_wrapper, "Return the number of mel bins used by the model.");
+    m.def("whisper_model_ftype", &whisper_model_ftype_wrapper, "Return the model file type identifier.");
+
+
+    ////////////////////////////////////////////////////////////////////////////
+
+    m.def("whisper_bench_memcpy", &whisper_bench_memcpy, "Temporary helpers needed for exposing ggml interface");
+    m.def("whisper_bench_ggml_mul_mat", &whisper_bench_ggml_mul_mat, "Temporary helpers needed for exposing ggml interface");
+
+    ////////////////////////////////////////////////////////////////////////////
+    // Helper mechanism to set callbacks from python
+    // The only difference from the C-Style API
+
+    m.def("assign_new_segment_callback",
+        [](whisper_full_params * params, py::object callback) {
+            assign_new_segment_callback(params, callback);
+        },
+        "Assign a new-segment callback.",
+        py::arg("params"), py::arg("callback") = py::none());
+
+    m.def("clear_new_segment_callback", &clear_new_segment_callback,
+        "Clear any previously assigned new-segment callback.",
+        py::arg("params"));
+
+    m.def("assign_encoder_begin_callback",
+            [](whisper_full_params * params, py::object callback) {
+                assign_encoder_begin_callback(params, callback);
+            },
+            "Assign an encoder-begin callback.",
+            py::arg("params"), py::arg("callback") = py::none());
+
+    m.def("clear_encoder_begin_callback", &clear_encoder_begin_callback,
+            "Clear any previously assigned encoder-begin callback.",
+            py::arg("params"));
+
+    m.def("assign_logits_filter_callback",
+            [](whisper_full_params * params, py::object callback) {
+                assign_logits_filter_callback(params, callback);
+            },
+            "Assign a logits-filter callback.",
+            py::arg("params"), py::arg("callback") = py::none());
+
+    m.def("clear_logits_filter_callback", &clear_logits_filter_callback,
+            "Clear any previously assigned logits-filter callback.",
+            py::arg("params"));
+
+    m.def("assign_progress_callback",
+        [](whisper_full_params * params, py::object callback) {
+            assign_progress_callback(params, callback);
+        },
+        "Assign a progress callback that receives progress updates.",
+        py::arg("params"), py::arg("callback") = py::none());
+
+    m.def("clear_progress_callback", &clear_progress_callback,
+        "Clear any previously assigned progress callback while preserving default progress behavior.",
+        py::arg("params"));
+
+        m.def("assign_abort_callback",
+            [](whisper_full_params * params, py::object callback) {
+                assign_abort_callback(params, callback);
+            },
+            "Assign an abort callback that returns True to stop processing.",
+            py::arg("params"), py::arg("callback") = py::none());
+
+            m.def("clear_abort_callback", &clear_abort_callback, "Clear any previously assigned abort callback.",
+                py::arg("params"));
+
+        m.def("whisper_log_set",
+            [](py::object callback) {
+                whisper_log_set_wrapper(callback);
+            },
+            "Assign a Python log callback or None to restore the default logger.",
+            py::arg("callback") = py::none());
+
+    // VAD
+    py::class_<whisper_vad_params>(m,"whisper_vad_params")
+            .def(py::init<>())
+            .def_readwrite("threshold", &whisper_vad_params::threshold)
+            .def_readwrite("min_speech_duration_ms", &whisper_vad_params::min_speech_duration_ms)
+            .def_readwrite("min_silence_duration_ms", &whisper_vad_params::min_silence_duration_ms)
+            .def_readwrite("max_speech_duration_s", &whisper_vad_params::max_speech_duration_s)
+            .def_readwrite("speech_pad_ms", &whisper_vad_params::speech_pad_ms)
+            .def_readwrite("samples_overlap", &whisper_vad_params::samples_overlap);
+
+    m.def("whisper_vad_default_params", &whisper_vad_default_params);
+
+    py::class_<whisper_vad_context_params>(m,"whisper_vad_context_params")
+            .def(py::init<>())
+            .def_readwrite("n_threads", &whisper_vad_context_params::n_threads)
+            .def_readwrite("use_gpu", &whisper_vad_context_params::use_gpu)
+            .def_readwrite("gpu_device", &whisper_vad_context_params::gpu_device);
+
+    m.def("whisper_vad_default_context_params", &whisper_vad_default_context_params);
+    m.def("whisper_vad_init_from_file_with_params", &whisper_vad_init_from_file_with_params_wrapper);
+    m.def("whisper_vad_detect_speech", &whisper_vad_detect_speech_wrapper);
+    m.def("whisper_vad_n_probs", &whisper_vad_n_probs_wrapper);
+    m.def("whisper_vad_probs", &whisper_vad_probs_wrapper);
+    py::class_<whisper_vad_segments_wrapper>(m, "whisper_vad_segments");
+    m.def("whisper_vad_segments_from_probs", &whisper_vad_segments_from_probs_wrapper);
+    m.def("whisper_vad_segments_from_samples", &whisper_vad_segments_from_samples_wrapper);
+    m.def("whisper_vad_segments_n_segments", &whisper_vad_segments_n_segments_wrapper);
+    m.def("whisper_vad_segments_get_segment_t0", &whisper_vad_segments_get_segment_t0_wrapper);
+    m.def("whisper_vad_segments_get_segment_t1", &whisper_vad_segments_get_segment_t1_wrapper);
+    m.def("whisper_vad_free_segments", &whisper_vad_free_segments_wrapper);
+    m.def("whisper_vad_free", &whisper_vad_free_wrapper);
+
+
+#ifdef VERSION_INFO
+    m.attr("__version__") = MACRO_STRINGIFY(VERSION_INFO);
+#else
+    m.attr("__version__") = "dev";
+#endif
+}
