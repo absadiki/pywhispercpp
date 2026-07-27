@@ -10,7 +10,10 @@
  ********************************************************************************
  */
 
+#include <pybind11/pybind11.h>
 #include "whisper_bindings.cpp"
+#include "parakeet_bindings.cpp"
+
 
 PYBIND11_MODULE(_pywhispercpp, m) {
     m.doc() = R"pbdoc(
@@ -25,4 +28,5 @@ PYBIND11_MODULE(_pywhispercpp, m) {
     )pbdoc";
 
     whisper_bindings(m);
+    parakeet_bindings(m);
 }
