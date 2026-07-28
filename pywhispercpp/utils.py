@@ -20,7 +20,6 @@ import requests
 from tqdm import tqdm
 
 from pywhispercpp.constants import (
-    AVAILABLE_MODELS,
     MODELS_BASE_URL,
     MODELS_DIR,
     MODELS_PREFIX_URL,
@@ -29,34 +28,36 @@ from pywhispercpp.constants import (
 logger = logging.getLogger(__name__)
 
 
-def _get_model_url(model_name: str) -> str:
+def _get_model_url(base_url: str, prefix_url: str, model_name: str) -> str:
     """
-    Returns the url of the `ggml` model
-    :param model_name: name of the model
-    :return: URL of the model
+    Build the download URL for a model.
+    :param base_url: base URL of the model repository.
+    :param prefix_url: path prefix before the model name.
+    :param model_name: name of the model.
+    :return: full download URL.
     """
-    return f"{MODELS_BASE_URL}/{MODELS_PREFIX_URL}-{model_name}.bin"
+    return f"{base_url}/{prefix_url}-{model_name}.bin"
 
 
-def download_model(model_name: str, download_dir=None, chunk_size=1024) -> str:
+def download_model(model_name: str, download_dir=None, chunk_size=1024,
+                   base_url=MODELS_BASE_URL, prefix_url=MODELS_PREFIX_URL) -> str:
     """
-    Helper function to download the `ggml` models
-    :param model_name: name of the model, one of ::: constants.AVAILABLE_MODELS
-    :param download_dir: Where to store the models
-    :param chunk_size: size of the download chunk
+    Download a model file from a remote repository.
 
-    :return: Absolute path of the downloaded model
+    :param model_name: name of the model (used to build the download URL).
+    :param download_dir: directory to store the model. Defaults to MODELS_DIR.
+    :param chunk_size: size of the download chunk.
+    :param base_url: base URL of the model repository.
+    :param prefix_url: path prefix before the model name.
+    :return: Absolute path of the downloaded model.
     """
-    if model_name not in AVAILABLE_MODELS:
-        logger.error(f"Invalid model name `{model_name}`, available models are: {AVAILABLE_MODELS}")
-        return
     if download_dir is None:
         download_dir = MODELS_DIR
         logger.info(f"No download directory was provided, models will be downloaded to {download_dir}")
 
     os.makedirs(download_dir, exist_ok=True)
 
-    url = _get_model_url(model_name=model_name)
+    url = _get_model_url(base_url=base_url, prefix_url=prefix_url, model_name=model_name)
     file_path = Path(download_dir) / os.path.basename(url)
     # check if the file is already there
     if file_path.exists():
@@ -85,17 +86,21 @@ def download_model(model_name: str, download_dir=None, chunk_size=1024) -> str:
     return str(file_path.absolute())
 
 
-def resolve_model_path(model_name: str, models_dir=None) -> str:
+def resolve_model_path(model_name: str, models_dir=None,
+                       base_url=MODELS_BASE_URL, prefix_url=MODELS_PREFIX_URL) -> str:
     """
     Resolve a model name to a local model file.
 
     Resolution order:
-    1. If `model_name` is an existing file path, return it.
-    2. Look for `model_name` and `model_name.bin` in `models_dir`.
-    3. If no local file is found, fall back to downloading a built-in model.
+    1. If ``model_name`` is an existing file path, return it.
+    2. Look for ``model_name`` and ``model_name.bin`` in ``models_dir``.
+    3. If no local file is found, download it from the remote repository.
 
-    :param model_name: A built-in model name, a custom model name, or a direct path to a model file.
-    :param models_dir: Directory to search for local models before downloading. Defaults to `MODELS_DIR`.
+    :param model_name: A direct file path or a model name to resolve/download.
+    :param models_dir: Directory to search for local models before downloading.
+        Defaults to ``MODELS_DIR``.
+    :param base_url: Base URL of the model repository for downloading.
+    :param prefix_url: Path prefix before the model name for downloading.
     :return: Absolute path to the resolved model file.
     """
     if Path(model_name).is_file():
@@ -112,7 +117,7 @@ def resolve_model_path(model_name: str, models_dir=None) -> str:
         if candidate.is_file():
             return str(candidate.resolve())
 
-    return download_model(model_name, search_dir)
+    return download_model(model_name, search_dir, base_url=base_url, prefix_url=prefix_url)
 
 
 def to_timestamp(t: int, separator=',') -> str:
