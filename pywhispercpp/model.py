@@ -6,13 +6,8 @@ This module contains a simple Python API on-top of the C-style
 [whisper.cpp](https://github.com/ggerganov/whisper.cpp) API.
 """
 import importlib.metadata
-import subprocess
-import os
 import logging
-import shutil
 import sys
-import tempfile
-import wave
 from pathlib import Path
 from time import time
 from typing import Any, Union, Callable, List, TextIO, Tuple, Optional, Dict, TypedDict
@@ -21,6 +16,7 @@ import _pywhispercpp as pw
 import numpy as np
 import pywhispercpp.constants as constants
 import pywhispercpp.utils as utils
+from pywhispercpp.base import BaseModel, Segment
 
 __author__ = "absadiki"
 __copyright__ = "Copyright 2023, "
@@ -43,33 +39,7 @@ class ContextParams(TypedDict, total=False):
 _CONTEXT_PARAM_KEYS = frozenset(ContextParams.__annotations__)
 
 
-class Segment:
-    """
-    A small class representing a transcription segment
-    """
-
-    def __init__(self, t0: int, t1: int, text: str, probability: float = np.nan):
-        """
-        :param t0: start time
-        :param t1: end time
-        :param text: text
-        :param probability: Confidence score for the segment, computed as the geometric mean of
-            the token probabilities for the segment (NaN if not calculated).
-            This makes it interpretable as a probability in [0, 1].
-        """
-        self.t0 = t0
-        self.t1 = t1
-        self.text = text
-        self.probability = probability
-
-    def __str__(self):
-        return f"t0={self.t0}, t1={self.t1}, text={self.text}, probability={self.probability}"
-
-    def __repr__(self):
-        return str(self)
-
-
-class Model:
+class Model(BaseModel):
     """
     This classes defines a Whisper.cpp model.
 
@@ -81,8 +51,6 @@ class Model:
         print(segment.text)
     ```
     """
-
-    
 
     def __init__(self,
                  model: str = 'tiny',
@@ -204,7 +172,7 @@ class Model:
         else:
             if not Path(media).exists():
                 raise FileNotFoundError(media)
-            audio = self._load_audio(media)
+            audio = utils.load_audio(media, sample_rate=pw.WHISPER_SAMPLE_RATE)
 
         # update params if any
         self._set_params(params)
@@ -264,23 +232,6 @@ class Model:
                     avg_prob = np.nan
 
             res.append(Segment(t0, t1, text.strip(), probability=float(avg_prob)))
-        return res
-
-    def get_params(self) -> dict:
-        """
-        Returns a `dict` representation of the actual params
-
-        :return: params dict
-        """
-        res = {}
-        for param in dir(self._params):
-            if param.startswith('__'):
-                continue
-            try:
-                res[param] = getattr(self._params, param)
-            except Exception:
-                # ignore callback functions
-                continue
         return res
 
     @staticmethod
@@ -435,63 +386,6 @@ class Model:
             if self._new_segment_callback is not None:
                 self._new_segment_callback(segment)
 
-    @staticmethod
-    def _load_audio(media_file_path: str) -> np.ndarray:
-        """
-         Helper method to return a `np.array` object from a media file
-         If the media file is not a WAV file, it will try to convert it using ffmpeg
-
-        :param media_file_path: Path of the media file
-        :return: Numpy array
-        """
-
-        def wav_to_np(file_path):
-            with wave.open(file_path, 'rb') as wf:
-                num_channels = wf.getnchannels()
-                sample_width = wf.getsampwidth()
-                sample_rate = wf.getframerate()
-                num_frames = wf.getnframes()
-
-                if num_channels not in (1, 2):
-                    raise Exception(f"WAV file must be mono or stereo")
-
-                if sample_rate != pw.WHISPER_SAMPLE_RATE:
-                    raise Exception(f"WAV file must be {pw.WHISPER_SAMPLE_RATE} Hz")
-
-                if sample_width != 2:
-                    raise Exception(f"WAV file must be 16-bit")
-
-                raw = wf.readframes(num_frames)
-                wf.close()
-                audio = np.frombuffer(raw, dtype=np.int16).astype(np.float32)
-                n = num_frames
-                if num_channels == 1:
-                    pcmf32 = audio / 32768.0
-                else:
-                    audio = audio.reshape(-1, 2)
-                    # Averaging the two channels
-                    pcmf32 = (audio[:, 0] + audio[:, 1]) / 65536.0
-                return pcmf32
-
-        if media_file_path.endswith('.wav'):
-            return wav_to_np(media_file_path)
-        else:
-            if shutil.which('ffmpeg') is None:
-                raise Exception(
-                    "FFMPEG is not installed or not in PATH. Please install it, or provide a WAV file or a NumPy array instead!")
-
-            temp_file = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
-            temp_file_path = temp_file.name
-            temp_file.close()
-            try:
-                subprocess.run([
-                    'ffmpeg', '-i', media_file_path, '-ac', '1', '-ar', '16000',
-                    temp_file_path, '-y'
-                ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                return wav_to_np(temp_file_path)
-            finally:
-                os.remove(temp_file_path)
-
     def auto_detect_language(self, media: Union[str, np.ndarray], offset_ms: Optional[int] = None, n_threads: Optional[int] = None) -> Tuple[Tuple[str, np.float32], Dict[str, np.float32]]:
         """
         Automatic language detection using whisper.cpp/whisper_pcm_to_mel and whisper.cpp/whisper_lang_auto_detect
@@ -506,7 +400,7 @@ class Model:
         else:
             if not Path(media).exists():
                 raise FileNotFoundError(media)
-            audio = self._load_audio(media)
+            audio = utils.load_audio(media, sample_rate=pw.WHISPER_SAMPLE_RATE)
 
         if offset_ms is None:
             offset_ms = self._params.offset_ms

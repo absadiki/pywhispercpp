@@ -7,10 +7,15 @@ Helper functions
 import contextlib
 import logging
 import os
+import shutil
+import subprocess
 import sys
+import tempfile
+import wave
 from pathlib import Path
 from typing import TextIO
 
+import numpy as np
 import requests
 from tqdm import tqdm
 
@@ -280,3 +285,60 @@ def redirect_stderr(to: bool | TextIO | str | None = False) -> None:
     finally:
         if should_close:
             stream.close()
+
+
+def load_audio(media_file_path: str, sample_rate: int = 16000) -> np.ndarray:
+    """
+    Load audio from a media file and return a numpy array.
+
+    If the file is WAV and matches the expected format, it is read directly.
+    Otherwise, ffmpeg is used to convert it to the required format.
+
+    :param media_file_path: Path to the audio/video file.
+    :param sample_rate: Expected sample rate in Hz. Default is 16000.
+    :return: numpy array of float32 audio samples.
+    """
+
+    def wav_to_np(file_path):
+        with wave.open(file_path, 'rb') as wf:
+            num_channels = wf.getnchannels()
+            sample_width = wf.getsampwidth()
+            file_sample_rate = wf.getframerate()
+            num_frames = wf.getnframes()
+
+            if num_channels not in (1, 2):
+                raise Exception("WAV file must be mono or stereo")
+
+            if file_sample_rate != sample_rate:
+                raise Exception(f"WAV file must be {sample_rate} Hz, got {file_sample_rate} Hz")
+
+            if sample_width != 2:
+                raise Exception("WAV file must be 16-bit")
+
+            raw = wf.readframes(num_frames)
+            audio = np.frombuffer(raw, dtype=np.int16).astype(np.float32)
+            if num_channels == 1:
+                pcmf32 = audio / 32768.0
+            else:
+                audio = audio.reshape(-1, 2)
+                pcmf32 = (audio[:, 0] + audio[:, 1]) / 65536.0
+            return pcmf32
+
+    if media_file_path.endswith('.wav'):
+        return wav_to_np(media_file_path)
+
+    if shutil.which('ffmpeg') is None:
+        raise Exception(
+            "FFMPEG is not installed or not in PATH. Please install it, or provide a WAV file or a NumPy array instead!")
+
+    temp_file = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
+    temp_file_path = temp_file.name
+    temp_file.close()
+    try:
+        subprocess.run([
+            'ffmpeg', '-i', media_file_path, '-ac', '1', '-ar', str(sample_rate),
+            temp_file_path, '-y'
+        ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        return wav_to_np(temp_file_path)
+    finally:
+        os.remove(temp_file_path)
