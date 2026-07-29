@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
-Python API for Parakeet TDT models
+Python API for the Parakeet TDT model on top of parakeet.h C-API
 """
 import logging
 from dataclasses import dataclass, fields
@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class ParakeetContextParams:
     """
-    Parameters for model context initialization.
+    Parameters for Parakeet context initialization.
     """
     use_gpu: Optional[bool] = None
     """Use GPU for inference."""
@@ -71,11 +71,11 @@ class ParakeetParams:
 
 class ParakeetModel(BaseModel):
     """
-    A Parakeet TDT model backed by parakeet.cpp.
+    Python API for the Parakeet TDT model on top of parakeet.h C-API
 
     Example usage::
 
-        model = ParakeetModel('path/to/parakeet.gguf')
+        model = ParakeetModel('path/to/parakeet_model.bin')
         segments = model.transcribe('audio.wav')
         for segment in segments:
             print(segment.text)
@@ -112,8 +112,8 @@ class ParakeetModel(BaseModel):
             from constants. If the model is not found locally, it will be downloaded and stored
             here. Ignored when *model* is a direct file path.
         :param redirect_logs_to: log redirection target. ``False`` for no redirection, ``None`` for /dev/null.
-        :param context_params: optional context params (GPU settings).
-        :param params: a ``ParakeetParams`` instance for default decode settings.
+        :param context_params: optional ``ParakeetContextParams`` for context params.
+        :param params: a ``ParakeetParams`` instance for parakeet settings.
         :param kwargs: override params as keyword arguments (e.g. ``n_threads=8``).
         """
         self.model_path = utils.resolve_model_path(

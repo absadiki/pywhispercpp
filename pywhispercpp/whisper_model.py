@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
-Python API for Whisper.cpp models
+Python API for The Whisper model on top of whisper.h C-API.
 """
 import logging
 from dataclasses import dataclass, fields
@@ -205,7 +205,7 @@ class WhisperParams:
 
 class WhisperModel(BaseModel):
     """
-    A Whisper model Python API on top of whisper.cpp C-API.
+    Python API for The Whisper model on top of whisper.h C-API.
 
     Example usage::
 
@@ -277,8 +277,8 @@ class WhisperModel(BaseModel):
         :param models_dir: directory to search for local model files. Defaults to ``MODELS_DIR``.
             Ignored when *model* is a direct file path.
         :param redirect_logs_to: log redirection target. ``False`` for no redirection, ``None`` for /dev/null.
-        :param context_params: optional ``WhisperContextParams`` for GPU settings.
-        :param params: a ``WhisperParams`` instance for default decode settings.
+        :param context_params: optional ``WhisperContextParams`` for context settings.
+        :param params: a ``WhisperParams`` instance for whisper settings.
         :param sampling_strategy: ``0`` for greedy, ``1`` for beam search.
         :param use_openvino: whether to initialize the OpenVINO encoder backend.
         :param openvino_model_path: path to the OpenVINO model directory or files.
