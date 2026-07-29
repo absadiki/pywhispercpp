@@ -234,6 +234,24 @@ class Model(BaseModel):
             res.append(Segment(t0, t1, text.strip(), probability=float(avg_prob)))
         return res
 
+
+    def get_params(self) -> dict:
+        """
+        Returns a `dict` representation of the actual params
+
+        :return: params dict
+        """
+        res = {}
+        for param in dir(self._params):
+            if param.startswith('__'):
+                continue
+            try:
+                res[param] = getattr(self._params, param)
+            except Exception:
+                # ignore callback functions
+                continue
+        return res
+
     @staticmethod
     def get_params_schema() -> dict:
         """

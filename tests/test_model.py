@@ -9,6 +9,7 @@ from pathlib import Path
 from unittest import TestCase
 
 import _pywhispercpp as pw
+import pywhispercpp.utils as utils
 from pywhispercpp.model import Model, Segment
 
 if __name__ == '__main__':
@@ -38,7 +39,7 @@ class TestModel(TestCase):
         return self.assertIsInstance(av_langs, list) and self.assertGreater(len(av_langs), 1)
 
     def test__load_audio(self):
-        audio_arr = self.model._load_audio(str(self.audio_file))
+        audio_arr = utils.load_audio(str(self.audio_file), sample_rate=pw.WHISPER_SAMPLE_RATE)
         return self.assertIsNotNone(audio_arr)
 
     def test_auto_detect_language(self):
