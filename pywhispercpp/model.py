@@ -8,6 +8,7 @@ This module contains a simple Python API on-top of the C-style
 import importlib.metadata
 import logging
 import sys
+import warnings
 from pathlib import Path
 from time import time
 from typing import Any, Union, Callable, List, TextIO, Tuple, Optional, Dict, TypedDict
@@ -42,6 +43,9 @@ _CONTEXT_PARAM_KEYS = frozenset(ContextParams.__annotations__)
 class Model(BaseModel):
     """
     This classes defines a Whisper.cpp model.
+
+    .. deprecated::
+        Use :class:`pywhispercpp.whisper_model.WhisperModel` instead.
 
     Example usage.
     ```python
@@ -125,6 +129,11 @@ class Model(BaseModel):
             - `vad`: enable VAD. Default `False`.
             - `vad_model_path`: path to the VAD model. Default `None`.
         """
+        warnings.warn(
+            "Model is deprecated, use pywhispercpp.whisper_model.WhisperModel instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         self.model_path = utils.resolve_model_path(model, models_dir)
         self._ctx = None
         self._context_params = self._resolve_context_params(context_params)

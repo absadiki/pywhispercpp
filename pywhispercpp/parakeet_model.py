@@ -9,7 +9,7 @@ from dataclasses import dataclass, fields
 from enum import StrEnum
 from pathlib import Path
 from time import time
-from typing import List, Optional, Union
+from typing import Callable, List, Optional, Union
 
 import _pywhispercpp as pw
 import numpy as np
@@ -137,8 +137,8 @@ class ParakeetModel(BaseModel):
 
     def transcribe(self,
                    media: Union[str, np.ndarray],
-                   new_segment_callback=None,
-                   abort_callback=None,
+                   new_segment_callback: Optional[Callable[[Segment], None]] = None,
+                   abort_callback: Optional[Callable[[], bool]] = None,
                    params: Optional[ParakeetParams] = None,
                    **kwargs) -> List[Segment]:
         """
