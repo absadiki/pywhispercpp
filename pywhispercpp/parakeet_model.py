@@ -6,6 +6,7 @@ Python API for Parakeet TDT models
 """
 import logging
 from dataclasses import dataclass, fields
+from enum import StrEnum
 from pathlib import Path
 from time import time
 from typing import List, Optional, Union
@@ -78,7 +79,22 @@ class ParakeetModel(BaseModel):
         segments = model.transcribe('audio.wav')
         for segment in segments:
             print(segment.text)
+
+    Or use a model name to download automatically::
+
+        model = ParakeetModel(ParakeetModel.AvailableModels.TDT_0_6B_V3_Q4_0)
     """
+
+    class AvailableModels(StrEnum):
+        """Available Parakeet model names for auto-download."""
+        TDT_0_6B_V3_F16 = "parakeet-tdt-0.6b-v3-f16"
+        TDT_0_6B_V3_F32 = "parakeet-tdt-0.6b-v3-f32"
+        TDT_0_6B_V3_Q4_0 = "parakeet-tdt-0.6b-v3-q4_0"
+        TDT_0_6B_V3_Q4_K = "parakeet-tdt-0.6b-v3-q4_k"
+        TDT_0_6B_V3_Q8_0 = "parakeet-tdt-0.6b-v3-q8_0"
+
+    _MODELS_BASE_URL = "https://huggingface.co/ggml-org/parakeet-GGUF"
+    _MODELS_PREFIX_URL = "resolve/main/ggml"
 
     def __init__(self,
                  model: str,
@@ -89,6 +105,9 @@ class ParakeetModel(BaseModel):
                  **kwargs):
         """
         :param model: path to a Parakeet GGUF model file, or a model name to resolve/download.
+            Use ``ParakeetModel.AvailableModels`` for available model names (e.g.
+            ``ParakeetModel.AvailableModels.TDT_0_6B_V3_Q4_0``). If the model is not
+            found locally, it will be downloaded automatically.
         :param models_dir: directory to search for local model files. Defaults to ``MODELS_DIR``
             from constants. If the model is not found locally, it will be downloaded and stored
             here. Ignored when *model* is a direct file path.
@@ -97,7 +116,11 @@ class ParakeetModel(BaseModel):
         :param params: a ``ParakeetParams`` instance for default decode settings.
         :param kwargs: override params as keyword arguments (e.g. ``n_threads=8``).
         """
-        self.model_path = utils.resolve_model_path(model, models_dir)
+        self.model_path = utils.resolve_model_path(
+            model, models_dir,
+            base_url=self._MODELS_BASE_URL,
+            prefix_url=self._MODELS_PREFIX_URL,
+        )
         self._ctx = None
         self._context_params = self._resolve_context_params(context_params)
         self._params = pw.parakeet_full_default_params(
