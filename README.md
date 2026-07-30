@@ -1,5 +1,5 @@
 # pywhispercpp
-Python bindings for [whisper.cpp](https://github.com/ggerganov/whisper.cpp) with a simple Pythonic API on top of it.
+Python bindings for [whisper.cpp](https://github.com/ggerganov/whisper.cpp) with a simple Pythonic API on top of it. Supports both Whisper and Parakeet models.
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![Wheels](https://github.com/absadiki/pywhispercpp/actions/workflows/wheels.yml/badge.svg?branch=main&event=push)](https://github.com/absadiki/pywhispercpp/actions/workflows/wheels.yml)
@@ -15,6 +15,8 @@ Python bindings for [whisper.cpp](https://github.com/ggerganov/whisper.cpp) with
     * [CoreML support](#coreml-support)
     * [Vulkan support](#vulkan-support)
 * [Quick start](#quick-start)
+    * [Whisper](#whisper)
+    * [Parakeet](#parakeet)
 * [Examples](#examples)
   * [CLI](#cli)
   * [GUI](#gui)
@@ -103,28 +105,30 @@ Note that the toolkit for Ubuntu22 works on Ubuntu24
 
 # Quick start
 
-```python
-from pywhispercpp.model import Model
+### Whisper
 
-model = Model('base.en')
+```python
+from pywhispercpp import WhisperModel, WhisperParams
+
+model = WhisperModel(WhisperModel.AvailableModels.BASE_EN, params=WhisperParams(n_threads=2))
 segments = model.transcribe('file.wav')
 for segment in segments:
     print(segment.text)
 ```
 
-You can also assign a custom `new_segment_callback`
+### Parakeet
 
 ```python
-from pywhispercpp.model import Model
+from pywhispercpp import ParakeetModel, ParakeetParams
 
-model = Model('base.en', print_realtime=False, print_progress=False)
-segments = model.transcribe('file.mp3', new_segment_callback=print)
+model = ParakeetModel(ParakeetModel.AvailableModels.TDT_0_6B_V3_Q4_0, params=ParakeetParams(n_threads=2))
+segments = model.transcribe('file.wav')
+for segment in segments:
+    print(segment.text)
 ```
 
-
 * The model will be downloaded automatically, or you can use the path to a local model.
-* You can pass any `whisper.cpp` [parameter](https://absadiki.github.io/pywhispercpp/#pywhispercpp.constants.PARAMS_SCHEMA) as a keyword argument to the `Model` class or to the `transcribe` function.
-* Check the [Model](https://absadiki.github.io/pywhispercpp/#pywhispercpp.model.Model) class documentation for more details.
+* Check the [WhisperModel](https://absadiki.github.io/pywhispercpp/#pywhispercpp.whisper_model.WhisperModel) and [ParakeetModel](https://absadiki.github.io/pywhispercpp/#pywhispercpp.parakeet_model.ParakeetModel) documentation for more details.
 
 # Examples
 

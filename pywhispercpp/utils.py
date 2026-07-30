@@ -7,15 +7,19 @@ Helper functions
 import contextlib
 import logging
 import os
+import shutil
+import subprocess
 import sys
+import tempfile
+import wave
 from pathlib import Path
 from typing import TextIO
 
+import numpy as np
 import requests
 from tqdm import tqdm
 
 from pywhispercpp.constants import (
-    AVAILABLE_MODELS,
     MODELS_BASE_URL,
     MODELS_DIR,
     MODELS_PREFIX_URL,
@@ -24,34 +28,36 @@ from pywhispercpp.constants import (
 logger = logging.getLogger(__name__)
 
 
-def _get_model_url(model_name: str) -> str:
+def _get_model_url(base_url: str, prefix_url: str, model_name: str) -> str:
     """
-    Returns the url of the `ggml` model
-    :param model_name: name of the model
-    :return: URL of the model
+    Build the download URL for a model.
+    :param base_url: base URL of the model repository.
+    :param prefix_url: path prefix before the model name.
+    :param model_name: name of the model.
+    :return: full download URL.
     """
-    return f"{MODELS_BASE_URL}/{MODELS_PREFIX_URL}-{model_name}.bin"
+    return f"{base_url}/{prefix_url}-{model_name}.bin"
 
 
-def download_model(model_name: str, download_dir=None, chunk_size=1024) -> str:
+def download_model(model_name: str, download_dir=None, chunk_size=1024,
+                   base_url=MODELS_BASE_URL, prefix_url=MODELS_PREFIX_URL) -> str:
     """
-    Helper function to download the `ggml` models
-    :param model_name: name of the model, one of ::: constants.AVAILABLE_MODELS
-    :param download_dir: Where to store the models
-    :param chunk_size: size of the download chunk
+    Download a model file from a remote repository.
 
-    :return: Absolute path of the downloaded model
+    :param model_name: name of the model (used to build the download URL).
+    :param download_dir: directory to store the model. Defaults to MODELS_DIR.
+    :param chunk_size: size of the download chunk.
+    :param base_url: base URL of the model repository.
+    :param prefix_url: path prefix before the model name.
+    :return: Absolute path of the downloaded model.
     """
-    if model_name not in AVAILABLE_MODELS:
-        logger.error(f"Invalid model name `{model_name}`, available models are: {AVAILABLE_MODELS}")
-        return
     if download_dir is None:
         download_dir = MODELS_DIR
         logger.info(f"No download directory was provided, models will be downloaded to {download_dir}")
 
     os.makedirs(download_dir, exist_ok=True)
 
-    url = _get_model_url(model_name=model_name)
+    url = _get_model_url(base_url=base_url, prefix_url=prefix_url, model_name=model_name)
     file_path = Path(download_dir) / os.path.basename(url)
     # check if the file is already there
     if file_path.exists():
@@ -80,17 +86,21 @@ def download_model(model_name: str, download_dir=None, chunk_size=1024) -> str:
     return str(file_path.absolute())
 
 
-def resolve_model_path(model_name: str, models_dir=None) -> str:
+def resolve_model_path(model_name: str, models_dir=None,
+                       base_url=MODELS_BASE_URL, prefix_url=MODELS_PREFIX_URL) -> str:
     """
     Resolve a model name to a local model file.
 
     Resolution order:
-    1. If `model_name` is an existing file path, return it.
-    2. Look for `model_name` and `model_name.bin` in `models_dir`.
-    3. If no local file is found, fall back to downloading a built-in model.
+    1. If ``model_name`` is an existing file path, return it.
+    2. Look for ``model_name`` and ``model_name.bin`` in ``models_dir``.
+    3. If no local file is found, download it from the remote repository.
 
-    :param model_name: A built-in model name, a custom model name, or a direct path to a model file.
-    :param models_dir: Directory to search for local models before downloading. Defaults to `MODELS_DIR`.
+    :param model_name: A direct file path or a model name to resolve/download.
+    :param models_dir: Directory to search for local models before downloading.
+        Defaults to ``MODELS_DIR``.
+    :param base_url: Base URL of the model repository for downloading.
+    :param prefix_url: Path prefix before the model name for downloading.
     :return: Absolute path to the resolved model file.
     """
     if Path(model_name).is_file():
@@ -107,7 +117,7 @@ def resolve_model_path(model_name: str, models_dir=None) -> str:
         if candidate.is_file():
             return str(candidate.resolve())
 
-    return download_model(model_name, search_dir)
+    return download_model(model_name, search_dir, base_url=base_url, prefix_url=prefix_url)
 
 
 def to_timestamp(t: int, separator=',') -> str:
@@ -280,3 +290,60 @@ def redirect_stderr(to: bool | TextIO | str | None = False) -> None:
     finally:
         if should_close:
             stream.close()
+
+
+def load_audio(media_file_path: str, sample_rate: int = 16000) -> np.ndarray:
+    """
+    Load audio from a media file and return a numpy array.
+
+    If the file is WAV and matches the expected format, it is read directly.
+    Otherwise, ffmpeg is used to convert it to the required format.
+
+    :param media_file_path: Path to the audio/video file.
+    :param sample_rate: Expected sample rate in Hz. Default is 16000.
+    :return: numpy array of float32 audio samples.
+    """
+
+    def wav_to_np(file_path):
+        with wave.open(file_path, 'rb') as wf:
+            num_channels = wf.getnchannels()
+            sample_width = wf.getsampwidth()
+            file_sample_rate = wf.getframerate()
+            num_frames = wf.getnframes()
+
+            if num_channels not in (1, 2):
+                raise Exception("WAV file must be mono or stereo")
+
+            if file_sample_rate != sample_rate:
+                raise Exception(f"WAV file must be {sample_rate} Hz, got {file_sample_rate} Hz")
+
+            if sample_width != 2:
+                raise Exception("WAV file must be 16-bit")
+
+            raw = wf.readframes(num_frames)
+            audio = np.frombuffer(raw, dtype=np.int16).astype(np.float32)
+            if num_channels == 1:
+                pcmf32 = audio / 32768.0
+            else:
+                audio = audio.reshape(-1, 2)
+                pcmf32 = (audio[:, 0] + audio[:, 1]) / 65536.0
+            return pcmf32
+
+    if media_file_path.endswith('.wav'):
+        return wav_to_np(media_file_path)
+
+    if shutil.which('ffmpeg') is None:
+        raise Exception(
+            "FFMPEG is not installed or not in PATH. Please install it, or provide a WAV file or a NumPy array instead!")
+
+    temp_file = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
+    temp_file_path = temp_file.name
+    temp_file.close()
+    try:
+        subprocess.run([
+            'ffmpeg', '-i', media_file_path, '-ac', '1', '-ar', str(sample_rate),
+            temp_file_path, '-y'
+        ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        return wav_to_np(temp_file_path)
+    finally:
+        os.remove(temp_file_path)

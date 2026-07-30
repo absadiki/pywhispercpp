@@ -8,5 +8,5 @@ pybind11_add_module(_pywhispercpp
 	src/main.cpp
 )
 
-target_link_libraries (_pywhispercpp PRIVATE whisper)
+target_link_libraries (_pywhispercpp PRIVATE whisper parakeet)
 

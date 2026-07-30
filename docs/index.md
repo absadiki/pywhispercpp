@@ -1,6 +1,10 @@
 # PyWhisperCpp API Reference
 
 
+::: pywhispercpp.whisper_model
+
+::: pywhispercpp.parakeet_model
+
 ::: pywhispercpp.model
 
 ::: pywhispercpp.constants
