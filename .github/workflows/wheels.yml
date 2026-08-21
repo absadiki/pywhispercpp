@@ -66,9 +66,8 @@ jobs:
       run: python -m cibuildwheel --output-dir wheelhouse
       env:
         CIBW_ARCHS: auto
-         # for windows setup.py repairwheel step should solve it
         CIBW_SKIP: pp* cp38-*
-        CIBW_ENVIRONMENT: CMAKE_ARGS="${{ matrix.cmake_args }}"
+        CIBW_ENVIRONMENT: CMAKE_ARGS="${{ matrix.cmake_args }}" NO_REPAIR=1
 
     - name: Verify clean directory
       run: git diff --exit-code
