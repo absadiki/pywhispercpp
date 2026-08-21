@@ -68,7 +68,6 @@ jobs:
         CIBW_ARCHS: auto
         CIBW_SKIP: pp* cp38-*
         CIBW_ENVIRONMENT: CMAKE_ARGS="${{ matrix.cmake_args }}"
-        CIBW_ENVIRONMENT_LINUX: CMAKE_ARGS="${{ matrix.cmake_args }}" NO_REPAIR=1
         CIBW_REPAIR_WHEEL_COMMAND_WINDOWS: ""
 
     - name: Verify clean directory

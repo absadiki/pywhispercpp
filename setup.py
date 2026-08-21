@@ -194,12 +194,8 @@ long_description = (this_directory / "README.md").read_text()
 class RepairWheel(bdist_wheel):
     def run(self):
         super().run()
-        if os.environ.get('NO_REPAIR', '0') == '1':
-            print("Skipping wheel repair")
-            return
-        # if os.environ.get('CIBUILDWHEEL', '0') == '0' or sys.platform.startswith('win'):
-        if sys.platform.startswith('win') or sys.platform.startswith('linux'):
-            # for linux and macos we use the default wheel repair command from cibuildwheel, for windows we need to do it manually as there is no repair command
+        if sys.platform.startswith('win'):
+            # Linux and macOS use cibuildwheel's default repair command.
             self.repair_wheel()
 
     def repair_wheel(self):
