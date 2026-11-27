@@ -13,7 +13,7 @@ jobs:
       fail-fast: false
       matrix:
         platform: [windows-latest, macos-14, ubuntu-latest]
-        python-version: ["3.8", "3.11"]
+        python-version: ["3.10", "3.11"]
         include:
           - platform: windows-latest
             cmake_args: -DGGML_BMI2=OFF
@@ -47,4 +47,3 @@ jobs:
 
 #    - name: Test C-API
 #      run: python -m unittest ./tests/test_c_api.py
-
