@@ -17,6 +17,8 @@
 
 #include "whisper.h"
 
+#include <stdexcept>
+
 
 #define STRINGIFY(x) #x
 #define MACRO_STRINGIFY(x) STRINGIFY(x)
@@ -58,32 +60,34 @@ struct whisper_model_loader_wrapper {
 
 };
 
-struct whisper_context_wrapper whisper_init_from_file_with_params_wrapper(
-        const char * path_model,
-        struct whisper_context_params cparams){
-    struct whisper_context * ctx = whisper_init_from_file_with_params(path_model, cparams);
+// whisper.cpp returns NULL when a model cannot be loaded (truncated or corrupt file,
+// unsupported format). Raise instead of handing Python a context that segfaults on first use.
+static struct whisper_context_wrapper wrap_context(struct whisper_context * ctx){
+    if (ctx == nullptr) {
+        throw std::runtime_error("whisper.cpp failed to load the model (file missing, truncated or corrupt?)");
+    }
     struct whisper_context_wrapper ctw_w;
     ctw_w.ptr = ctx;
     return ctw_w;
+}
+
+struct whisper_context_wrapper whisper_init_from_file_with_params_wrapper(
+        const char * path_model,
+        struct whisper_context_params cparams){
+    return wrap_context(whisper_init_from_file_with_params(path_model, cparams));
 }
 
 struct whisper_context_wrapper whisper_init_from_buffer_with_params_wrapper(
         void * buffer,
         size_t buffer_size,
         struct whisper_context_params cparams){
-    struct whisper_context * ctx = whisper_init_from_buffer_with_params(buffer, buffer_size, cparams);
-    struct whisper_context_wrapper ctw_w;
-    ctw_w.ptr = ctx;
-    return ctw_w;
+    return wrap_context(whisper_init_from_buffer_with_params(buffer, buffer_size, cparams));
 }
 
 struct whisper_context_wrapper whisper_init_with_params_wrapper(
         struct whisper_model_loader_wrapper * loader,
         struct whisper_context_params cparams){
-    struct whisper_context * ctx = whisper_init_with_params(loader->ptr, cparams);
-    struct whisper_context_wrapper ctw_w;
-    ctw_w.ptr = ctx;
-    return ctw_w;
+    return wrap_context(whisper_init_with_params(loader->ptr, cparams));
 };
 
 void whisper_free_wrapper(struct whisper_context_wrapper * ctx_w){

@@ -2,7 +2,9 @@
 
 import _pywhispercpp as pw
 
+import tempfile
 import unittest
+from pathlib import Path
 from unittest import TestCase
 
 
@@ -16,6 +18,18 @@ class TestCAPI(TestCase):
             pw.whisper_context_default_params(),
         )
         self.assertIsInstance(ctx, pw.whisper_context)
+
+    def test_whisper_init_from_invalid_file_raises(self):
+        # A failed load used to yield a NULL context that segfaulted on first use
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            invalid = Path(tmp_dir) / 'invalid.bin'
+            invalid.write_bytes(b'not a ggml model' * 64)
+            with self.assertRaises(RuntimeError):
+                pw.whisper_init_from_file_with_params(str(invalid), pw.whisper_context_default_params())
+
+    def test_whisper_init_from_missing_file_raises(self):
+        with self.assertRaises(RuntimeError):
+            pw.whisper_init_from_file_with_params('./does-not-exist.bin', pw.whisper_context_default_params())
 
     def test_whisper_lang_str(self):
         return self.assertEqual(pw.whisper_lang_str(0), 'en')
