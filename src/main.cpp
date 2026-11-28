@@ -281,8 +281,13 @@ int whisper_full_n_tokens_wrapper(struct whisper_context_wrapper * ctx, int i_se
      return whisper_full_n_tokens(ctx->ptr, i_segment);
 }
 
-const char * whisper_full_get_token_text_wrapper(struct whisper_context_wrapper * ctx, int i_segment, int i_token){
-    return whisper_full_get_token_text(ctx->ptr, i_segment, i_token);
+py::bytes whisper_full_get_token_text_wrapper(struct whisper_context_wrapper * ctx, int i_segment, int i_token){
+    const char * c_array = whisper_full_get_token_text(ctx->ptr, i_segment, i_token);
+    size_t length = strlen(c_array);
+    // CJK vocabularies contain byte-fallback pieces, so a single token's text can
+    // be a fragment of a UTF-8 sequence. Return raw bytes (as whisper_full_get_segment_text
+    // already does) and let the caller decode after concatenating tokens.
+    return py::bytes(c_array, length);
 }
 
 whisper_token whisper_full_get_token_id_wrapper(struct whisper_context_wrapper * ctx, int i_segment, int i_token){
@@ -1259,7 +1264,9 @@ PYBIND11_MODULE(_pywhispercpp, m) {
     m.def("whisper_full_get_segment_text", &whisper_full_get_segment_text_wrapper, "Get the text of the specified segment");
     m.def("whisper_full_n_tokens", &whisper_full_n_tokens_wrapper, "Get number of tokens in the specified segment.");
 
-    m.def("whisper_full_get_token_text", &whisper_full_get_token_text_wrapper, "Get the token text of the specified token in the specified segment.");
+    m.def("whisper_full_get_token_text", &whisper_full_get_token_text_wrapper, "Get the raw bytes of the token text for the specified token in the specified segment.\n"
+                                                                                "CJK vocabularies contain byte-fallback pieces, so a token's bytes may be a partial\n"
+                                                                                "UTF-8 sequence: concatenate the token bytes before decoding.");
     m.def("whisper_full_get_token_id", &whisper_full_get_token_id_wrapper, "Get the token text of the specified token in the specified segment.");
 
     m.def("whisper_full_get_token_data", &whisper_full_get_token_data_wrapper, "Get token data for the specified token in the specified segment.\n"
